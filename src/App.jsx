@@ -56,5 +56,3 @@ function Card({title, price, space}) {
     </div>
   )
 }
-
-
