@@ -1,4 +1,5 @@
-function Pricing({ onOpenAuth, isLoggedIn }) {
+function <Pricing onOpenAuth={() => setOpenAuth(true)} isLoggedIn={!!session} />
+
   const plans = useMemo(
     () => [
       {
