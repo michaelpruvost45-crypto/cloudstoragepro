@@ -16,7 +16,7 @@ export default function App() {
             <a href="#home">Accueil</a>
             <a href="#features">Fonctionnalités</a>
             <a href="#pricing">Tarifs</a>
-            {/* lien vers vraie page contact */}
+            {/* contact ouvre une autre page */}
             <a href="/contact.html">Contact</a>
           </nav>
 
