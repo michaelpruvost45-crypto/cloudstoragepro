@@ -21,12 +21,16 @@ export default function App() {
 
   const isLoggedIn = !!session;
   const userEmail = session?.user?.email || "";
+  const firstName = session?.user?.user_metadata?.first_name || "";
+  const lastName = session?.user?.user_metadata?.last_name || "";
+  const fullName = `${firstName} ${lastName}`.trim();
 
   return (
     <div>
       <Header
         isLoggedIn={isLoggedIn}
         userEmail={userEmail}
+        fullName={fullName}
         onOpenAuth={() => setOpenAuth(true)}
         onLogout={logout}
       />
@@ -43,11 +47,13 @@ export default function App() {
           onLoggedIn={() => setOpenAuth(false)}
         />
       )}
+
+      <style>{css}</style>
     </div>
   );
 }
 
-function Header({ isLoggedIn, userEmail, onOpenAuth, onLogout }) {
+function Header({ isLoggedIn, userEmail, fullName, onOpenAuth, onLogout }) {
   return (
     <header className="topbar">
       <div className="container topbar__inner">
@@ -69,7 +75,10 @@ function Header({ isLoggedIn, userEmail, onOpenAuth, onLogout }) {
           </button>
         ) : (
           <div className="userBox">
-            <span className="userBox__email">{userEmail}</span>
+            <div className="userBox__who">
+              <div className="userBox__name">{fullName || "Utilisateur"}</div>
+              <div className="userBox__email">{userEmail}</div>
+            </div>
             <button className="btn btn--light" onClick={onLogout}>
               Déconnexion
             </button>
@@ -292,7 +301,6 @@ function AuthForm({ onLoggedIn }) {
     try {
       if (!email) throw new Error("Ajoute un email.");
 
-      // ✅ MOT DE PASSE OUBLIÉ
       if (mode === "forgot") {
         const redirectTo = window.location.origin;
         const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
@@ -304,7 +312,6 @@ function AuthForm({ onLoggedIn }) {
 
       if (!password) throw new Error("Ajoute un mot de passe.");
 
-      // ✅ INSCRIPTION + PRENOM / NOM
       if (mode === "signup") {
         if (!firstName.trim()) throw new Error("Ajoute ton prénom.");
         if (!lastName.trim()) throw new Error("Ajoute ton nom.");
@@ -328,7 +335,6 @@ function AuthForm({ onLoggedIn }) {
         return;
       }
 
-      // ✅ CONNEXION
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
@@ -387,7 +393,6 @@ function AuthForm({ onLoggedIn }) {
       </h3>
 
       <form onSubmit={submit}>
-        {/* ✅ Champs prénom/nom seulement en signup */}
         {mode === "signup" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <label className="authLabel">
@@ -423,7 +428,6 @@ function AuthForm({ onLoggedIn }) {
           />
         </label>
 
-        {/* Mot de passe seulement si login/signup */}
         {mode !== "forgot" && (
           <label className="authLabel">
             Mot de passe
@@ -448,7 +452,7 @@ function AuthForm({ onLoggedIn }) {
         </button>
       </form>
 
-      {/* ✅ SOUS LA CONNEXION: mot de passe oublié PUIS renvoyer mail */}
+      {/* ✅ ordre demandé : Mot de passe oublié PUIS Renvoyer email */}
       {mode === "login" && (
         <>
           <button
@@ -462,12 +466,7 @@ function AuthForm({ onLoggedIn }) {
             Mot de passe oublié ?
           </button>
 
-          <button
-            className="authSwitch"
-            type="button"
-            onClick={resendConfirmation}
-            disabled={loading}
-          >
+          <button className="authSwitch" type="button" onClick={resendConfirmation} disabled={loading}>
             Renvoyer l’email de confirmation
           </button>
 
@@ -518,3 +517,92 @@ function AuthForm({ onLoggedIn }) {
     </div>
   );
 }
+
+/* =========================
+   CSS (léger) pour le header
+   ========================= */
+const css = `
+.container{max-width:1100px;margin:0 auto;padding:0 16px}
+.topbar{position:sticky;top:0;z-index:10;background:#0b3c84;color:#fff;border-bottom:1px solid rgba(255,255,255,.1)}
+.topbar__inner{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none}
+.brand__logo{height:34px;width:auto}
+.brand__name{font-weight:800;letter-spacing:.2px}
+.nav{display:flex;gap:18px;align-items:center}
+.nav a{color:rgba(255,255,255,.9);text-decoration:none;font-weight:600}
+.nav a:hover{color:#fff}
+.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer}
+.btn--light{background:rgba(255,255,255,.95);color:#0b3c84}
+.btn--light:hover{opacity:.95}
+.btn--primary{background:#0b63d1;color:#fff}
+.btn--ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
+.btn--full{width:100%}
+.btn--center{display:block;margin:0 auto}
+.btn--gold{background:#f4b000;color:#13223d}
+.userBox{display:flex;align-items:center;gap:12px}
+.userBox__who{display:flex;flex-direction:column;line-height:1.1;align-items:flex-end}
+.userBox__name{font-weight:900}
+.userBox__email{font-size:12px;opacity:.85}
+.hero{background:linear-gradient(135deg,#0b3c84 0%,#0b63d1 55%,#2aa7ff 100%);color:#fff;position:relative;overflow:hidden}
+.hero__inner{display:grid;grid-template-columns:1.2fr .8fr;gap:20px;align-items:center;padding:56px 0}
+.hero h1{font-size:42px;margin:0 0 12px}
+.hero p{opacity:.92;max-width:520px;margin:0 0 18px}
+.hero__cta{display:flex;gap:12px;flex-wrap:wrap}
+.heroCard{position:relative;height:220px}
+.heroCard__big{position:absolute;right:0;top:20px;width:320px;height:180px;border-radius:22px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(10px);display:flex;flex-direction:column;justify-content:center;align-items:center}
+.heroCard__icon{font-size:40px}
+.heroCard__title{font-weight:900;margin-top:10px}
+.heroCard__sub{opacity:.9;font-size:13px}
+.heroCard__bubble{position:absolute;left:24px;top:30px;width:66px;height:66px;border-radius:999px;background:rgba(255,255,255,.18)}
+.heroCard__bubble--2{left:90px;top:120px;width:44px;height:44px;opacity:.8}
+.heroCard__bubble--3{left:10px;top:150px;width:26px;height:26px;opacity:.6}
+.hero__clouds{height:60px;background:radial-gradient(circle at 10% 10%,rgba(255,255,255,.35) 0 22px,transparent 23px),
+radial-gradient(circle at 40% 40%,rgba(255,255,255,.28) 0 28px,transparent 29px),
+radial-gradient(circle at 70% 30%,rgba(255,255,255,.22) 0 24px,transparent 25px);
+opacity:.55}
+.section{padding:56px 0;background:#fff}
+.section--soft{background:#f6f9ff}
+.section__title{text-align:center;margin:0 0 22px;color:#10264d}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.serviceCard{background:#fff;border-radius:16px;padding:18px;border:1px solid #e8eefb;text-align:center;box-shadow:0 10px 30px rgba(16,38,77,.06)}
+.serviceCard__icon{font-size:28px}
+.serviceCard__title{font-weight:900;margin-top:8px}
+.serviceCard__desc{opacity:.75;margin-top:6px}
+.pricingGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:stretch}
+.priceCard{background:#fff;border-radius:18px;padding:18px;border:1px solid #e8eefb;box-shadow:0 10px 30px rgba(16,38,77,.06);position:relative}
+.priceCard--pro{background:linear-gradient(180deg,#0b63d1 0%,#083a7b 100%);color:#fff;border:0}
+.priceCard__badge{position:absolute;top:10px;left:10px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.22);color:#fff;padding:6px 10px;border-radius:999px;font-weight:900;font-size:12px}
+.priceCard__name{font-weight:900;font-size:22px;text-align:center;margin-top:8px}
+.priceCard__price{text-align:center;margin:12px 0 10px}
+.priceCard__currency{font-weight:900}
+.priceCard__amount{font-size:42px;font-weight:1000}
+.priceCard__per{opacity:.85}
+.priceCard__list{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:8px}
+.priceCard__list li{opacity:.9}
+.note{margin-top:14px;text-align:center;opacity:.75}
+.contactForm{max-width:560px;margin:0 auto;background:#fff;border:1px solid #e8eefb;border-radius:18px;padding:18px;box-shadow:0 10px 30px rgba(16,38,77,.06);display:grid;gap:10px}
+.input,.textarea{width:100%;border:1px solid #dfe7fb;border-radius:12px;padding:12px 12px;font-size:14px;outline:none}
+.input:focus,.textarea:focus{border-color:#0b63d1}
+.footer{background:#081b3a;color:#fff}
+.footer__inner{padding:18px 0;opacity:.9;text-align:center}
+.modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:18px;z-index:50}
+.modalCard{width:420px;max-width:100%;background:linear-gradient(180deg,#0b63d1 0%,#083a7b 100%);color:#fff;border-radius:18px;padding:16px 16px 14px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.modalClose{position:absolute;right:12px;top:10px;border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:10px;width:34px;height:34px;cursor:pointer}
+.authHead{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.authLogo{height:34px;width:auto;border-radius:8px;background:rgba(255,255,255,.1);padding:4px}
+.authBrand{font-weight:1000}
+.authSub{opacity:.85;font-size:12px}
+.authTitle{margin:10px 0 10px}
+.authLabel{display:block;font-weight:800;font-size:12px;opacity:.95;margin-top:10px}
+.authInput{width:100%;margin-top:6px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;padding:12px 12px;outline:none}
+.authInput::placeholder{color:rgba(255,255,255,.75)}
+.authSwitch{display:block;width:100%;margin-top:10px;background:transparent;border:0;color:rgba(255,255,255,.92);font-weight:900;cursor:pointer;text-decoration:underline}
+.authMsg{margin-top:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);padding:10px;border-radius:12px}
+.authHint{margin-top:10px;font-size:12px;opacity:.85}
+@media(max-width:900px){
+  .hero__inner{grid-template-columns:1fr}
+  .heroCard{height:180px}
+  .heroCard__big{width:100%}
+  .grid3,.pricingGrid{grid-template-columns:1fr}
+}
+`;
