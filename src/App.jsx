@@ -79,8 +79,8 @@ export default function App() {
 
             <div className="price-card popular">
               <h3>Pro</h3>
-              <p className="price">10.99€<span>/mois</span></p>
-              <p>1 To de stockage</p>
+              <p className="price">9.99€<span>/mois</span></p>
+              <p>2 To de stockage</p>
               <button className="btn-primary">Choisir</button>
             </div>
 
