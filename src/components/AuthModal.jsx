@@ -2,83 +2,81 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 export default function AuthModal({ onClose }) {
-  const [mode, setMode] = useState('login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [message, setMessage] = useState('')
+  const [mode,setMode] = useState("login")
+  const [email,setEmail]=useState("")
+  const [password,setPassword]=useState("")
+  const [first,setFirst]=useState("")
+  const [last,setLast]=useState("")
+  const [msg,setMsg]=useState("")
 
-  const signUp = async () => {
-    if (!firstName || !lastName) {
-      setMessage("Nom et prénom obligatoires")
+  async function signup(){
+    if(!first || !last){
+      setMsg("Nom et prénom obligatoires")
       return
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password
-    })
-
-    if (error) return setMessage(error.message)
+    const { data, error } = await supabase.auth.signUp({email,password})
+    if(error) return setMsg(error.message)
 
     await supabase.from('profiles').insert({
-      id: data.user.id,
-      first_name: firstName,
-      last_name: lastName,
-      plan: 'Aucun'
+      id:data.user.id,
+      first_name:first,
+      last_name:last,
+      plan:"Aucun"
     })
 
-    setMessage("Email de confirmation envoyé ✅")
+    setMsg("Email de confirmation envoyé ✅")
   }
 
-  const login = async () => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) setMessage(error.message)
-    else window.location.reload()
+  async function login(){
+    const {error} = await supabase.auth.signInWithPassword({email,password})
+    if(error) setMsg(error.message)
+    else location.reload()
   }
 
-  const resetPassword = async () => {
+  async function reset(){
     await supabase.auth.resetPasswordForEmail(email)
-    setMessage("Email de réinitialisation envoyé")
+    setMsg("Email de réinitialisation envoyé")
   }
 
-  const resendConfirmation = async () => {
-    await supabase.auth.resend({
-      type: 'signup',
-      email
-    })
-    setMessage("Email renvoyé")
+  async function resend(){
+    await supabase.auth.resend({ type:"signup", email })
+    setMsg("Email de confirmation renvoyé")
   }
 
   return (
-    <div className="modal">
-      <div className="box">
-        <h2>{mode === 'login' ? 'Connexion' : mode === 'signup' ? 'Inscription' : 'Mot de passe oublié'}</h2>
+    <div className="modal-bg">
+      <div className="modal">
 
-        {mode === 'signup' && (
+        <h2>
+          {mode==="login" && "Connexion"}
+          {mode==="signup" && "Inscription"}
+          {mode==="reset" && "Mot de passe oublié"}
+        </h2>
+
+        {mode==="signup" && (
           <>
-            <input placeholder="Nom * (ex: Dupont)" onChange={e=>setLastName(e.target.value)} />
-            <input placeholder="Prénom * (ex: Jean)" onChange={e=>setFirstName(e.target.value)} />
+            <input placeholder="Nom * (ex: Martin)" onChange={e=>setLast(e.target.value)}/>
+            <input placeholder="Prénom * (ex: Lucas)" onChange={e=>setFirst(e.target.value)}/>
           </>
         )}
 
-        <input placeholder="Email" onChange={e=>setEmail(e.target.value)} />
-        {mode !== 'reset' && (
-          <input type="password" placeholder="Mot de passe" onChange={e=>setPassword(e.target.value)} />
+        <input placeholder="Email" onChange={e=>setEmail(e.target.value)}/>
+        {mode!=="reset" && (
+          <input type="password" placeholder="Mot de passe" onChange={e=>setPassword(e.target.value)}/>
         )}
 
-        {mode === 'login' && <button onClick={login}>Se connecter</button>}
-        {mode === 'signup' && <button onClick={signUp}>Créer un compte</button>}
-        {mode === 'reset' && <button onClick={resetPassword}>Envoyer</button>}
+        {mode==="login" && <button onClick={login}>Se connecter</button>}
+        {mode==="signup" && <button onClick={signup}>Créer un compte</button>}
+        {mode==="reset" && <button onClick={reset}>Envoyer</button>}
 
-        <p style={{color:'red'}}>{message}</p>
+        <p className="msg">{msg}</p>
 
-        {mode === 'login' && (
+        {mode==="login" && (
           <>
-            <p onClick={()=>setMode('reset')}>Mot de passe oublié ?</p>
-            <p onClick={resendConfirmation}>Renvoyer email de confirmation</p>
-            <p onClick={()=>setMode('signup')}>Créer un compte</p>
+            <p onClick={()=>setMode("reset")}>Mot de passe oublié ?</p>
+            <p onClick={resend}>Renvoyer email confirmation</p>
+            <p onClick={()=>setMode("signup")}>Créer un compte</p>
           </>
         )}
 
