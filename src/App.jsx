@@ -16,7 +16,8 @@ export default function App() {
             <a href="#home">Accueil</a>
             <a href="#features">Fonctionnalités</a>
             <a href="#pricing">Tarifs</a>
-            <a href="#contact">Contact</a>
+            {/* lien vers vraie page contact */}
+            <a href="/contact.html">Contact</a>
           </nav>
 
           <button className="btn-outline">Connexion</button>
@@ -80,7 +81,7 @@ export default function App() {
             <div className="price-card popular">
               <h3>Pro</h3>
               <p className="price">9.99€<span>/mois</span></p>
-              <p>2 To de stockage</p>
+              <p>1 To de stockage</p>
               <button className="btn-primary">Choisir</button>
             </div>
 
@@ -93,25 +94,6 @@ export default function App() {
           </div>
         </div>
       </section>
-
-      <form 
-  class="contactForm"
-  action="https://formsubmit.co/contact@michaelcreation.fr"
-  method="POST"
->
-  <!-- Anti spam -->
-  <input type="hidden" name="_captcha" value="false">
-
-  <!-- Page Merci -->
-  <input type="hidden" name="_next" value="https://cloudstoragepro.vercel.app/merci.html">
-
-  <input name="name" placeholder="Nom" required>
-  <input name="email" type="email" placeholder="Email" required>
-  <textarea name="message" placeholder="Message" rows="5" required></textarea>
-
-  <button type="submit">Envoyer</button>
-</form>
-
 
       {/* ===== FOOTER ===== */}
       <footer className="footer">
