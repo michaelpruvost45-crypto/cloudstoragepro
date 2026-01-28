@@ -210,7 +210,6 @@ function Pricing({ onOpenAuth, isLoggedIn }) {
                 ))}
               </ul>
 
-              {/* ✅ Quand connecté : "CHOISIR" pour tous */}
               <button
                 className={`btn ${p.highlight ? "btn--gold" : "btn--primary"} btn--full`}
                 onClick={() => handleChoose(p.name)}
@@ -278,6 +277,8 @@ function AuthModal({ onClose, onLoggedIn }) {
 
 function AuthForm({ onLoggedIn }) {
   const [mode, setMode] = useState("login"); // login | signup | forgot
+  const [firstName, setFirstName] = useState(""); // signup
+  const [lastName, setLastName] = useState(""); // signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -291,12 +292,10 @@ function AuthForm({ onLoggedIn }) {
     try {
       if (!email) throw new Error("Ajoute un email.");
 
-      // ✅ MODE: FORGOT PASSWORD
+      // ✅ MOT DE PASSE OUBLIÉ
       if (mode === "forgot") {
-        const redirectTo = window.location.origin; // ton site vercel
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo
-        });
+        const redirectTo = window.location.origin;
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
         if (error) throw error;
 
         setMsg("✅ Email envoyé. Clique sur le lien dans ton mail pour changer ton mot de passe.");
@@ -305,17 +304,31 @@ function AuthForm({ onLoggedIn }) {
 
       if (!password) throw new Error("Ajoute un mot de passe.");
 
-      // ✅ MODE: SIGNUP
+      // ✅ INSCRIPTION + PRENOM / NOM
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
+        if (!firstName.trim()) throw new Error("Ajoute ton prénom.");
+        if (!lastName.trim()) throw new Error("Ajoute ton nom.");
+
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              first_name: firstName.trim(),
+              last_name: lastName.trim()
+            }
+          }
+        });
+
         if (error) throw error;
 
         setMsg("✅ Compte créé. Un email de confirmation a été envoyé. Vérifie ta boîte mail !");
         setMode("login");
+        setPassword("");
         return;
       }
 
-      // ✅ MODE: LOGIN
+      // ✅ CONNEXION
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
@@ -374,6 +387,31 @@ function AuthForm({ onLoggedIn }) {
       </h3>
 
       <form onSubmit={submit}>
+        {/* ✅ Champs prénom/nom seulement en signup */}
+        {mode === "signup" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label className="authLabel">
+              Prénom
+              <input
+                className="authInput"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="ex: Michael"
+              />
+            </label>
+
+            <label className="authLabel">
+              Nom
+              <input
+                className="authInput"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="ex: Pruvost"
+              />
+            </label>
+          </div>
+        )}
+
         <label className="authLabel">
           Email
           <input
@@ -385,7 +423,7 @@ function AuthForm({ onLoggedIn }) {
           />
         </label>
 
-        {/* mot de passe seulement si login ou signup */}
+        {/* Mot de passe seulement si login/signup */}
         {mode !== "forgot" && (
           <label className="authLabel">
             Mot de passe
@@ -410,19 +448,9 @@ function AuthForm({ onLoggedIn }) {
         </button>
       </form>
 
-      {/* ✅ LIENS SOUS LE FORM */}
+      {/* ✅ SOUS LA CONNEXION: mot de passe oublié PUIS renvoyer mail */}
       {mode === "login" && (
         <>
-          <button
-            className="btn btn--ghost btn--full"
-            type="button"
-            onClick={resendConfirmation}
-            disabled={loading}
-            style={{ marginTop: 10 }}
-          >
-            Renvoyer l’email de confirmation
-          </button>
-
           <button
             className="authSwitch"
             type="button"
@@ -432,6 +460,15 @@ function AuthForm({ onLoggedIn }) {
             }}
           >
             Mot de passe oublié ?
+          </button>
+
+          <button
+            className="authSwitch"
+            type="button"
+            onClick={resendConfirmation}
+            disabled={loading}
+          >
+            Renvoyer l’email de confirmation
           </button>
 
           <button
