@@ -111,7 +111,7 @@ export default function App() {
             <input
               type="hidden"
               name="_next"
-              value="https://TON-SITE.vercel.app/merci.html"
+              value="https://cloudstoragepro.vercel.app//merci.html"
             />
 
             <input
