@@ -1,4 +1,4 @@
-import "./styles.cs s";
+import "./styles.css";
 import logo from "/logo.png";
 
 export default function App() {
