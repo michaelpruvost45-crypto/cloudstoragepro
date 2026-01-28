@@ -22,27 +22,40 @@ export default function App() {
     });
   }, []);
 
-  // Contact form
-  function handleContactChange(e) {
-    setContact({ ...contact, [e.target.name]: e.target.value });
-  }
+  // Contact form state
+const [contact, setContact] = useState({
+  name: "",
+  email: "",
+  message: ""
+});
+const [messageStatus, setMessageStatus] = useState("");
 
-  async function sendContact(e) {
-    e.preventDefault();
-    setMessageStatus("Envoi...");
+// Handle input
+function handleContactChange(e) {
+  setContact({ ...contact, [e.target.name]: e.target.value });
+}
 
-    const { error } = await supabase
-      .from("messages_contact")
-      .insert([contact]);
+// Send message
+async function sendContact(e) {
+  e.preventDefault();
+  setMessageStatus("Envoi en cours...");
 
-    if (error) {
-      console.error(error);
-      setMessageStatus("❌ Erreur d'envoi");
-    } else {
-      setMessageStatus("✅ Message envoyé !");
-      setContact({ name: "", email: "", message: "" });
+  const { error } = await supabase.from("messages_contact").insert([
+    {
+      name: contact.name,
+      email: contact.email,
+      message: contact.message
     }
+  ]);
+
+  if (error) {
+    console.error("Supabase error:", error);
+    setMessageStatus("❌ Erreur : " + error.message);
+  } else {
+    setMessageStatus("✅ Message envoyé !");
+    setContact({ name: "", email: "", message: "" });
   }
+}
 
   // Login simple
   async function signIn() {
