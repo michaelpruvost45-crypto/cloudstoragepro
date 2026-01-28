@@ -1,13 +1,98 @@
-.modal{
-position:fixed;top:0;left:0;width:100%;height:100%;background:#0008;
-display:flex;align-items:center;justify-content:center;
+body{
+margin:0;
+font-family:Arial;
+background:#f6f8fc;
+color:#111;
 }
-.box{background:#fff;padding:20px;border-radius:10px;width:300px}
-input,button{width:100%;margin:5px;padding:8px}
 
-.pricing{display:flex;gap:20px;justify-content:center}
-.card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 5px 15px #0002}
+/* NAV */
+.nav{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:20px 60px;
+background:#0a2b66;
+color:white;
+}
+.logo{font-size:22px;font-weight:bold}
+.logo span{color:#ff8a00}
+.nav-links a{margin:0 10px;cursor:pointer}
+.nav-links button{
+background:#1e90ff;border:none;color:white;padding:8px 16px;border-radius:6px;
+}
 
-.dashboard{display:flex;justify-content:center;margin-top:50px}
-.card-pro{background:#fff;padding:30px;border-radius:15px;width:400px;box-shadow:0 10px 30px #0002}
-.buttons button{margin:5px}
+/* HERO */
+.hero{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:60px;
+background:linear-gradient(90deg,#0b3d91,#1e90ff);
+color:white;
+border-radius:0 0 30px 30px;
+}
+.hero-text h1{font-size:38px}
+.hero-buttons{margin-top:20px}
+.btn-primary{
+background:#ff8a00;border:none;padding:10px 20px;color:white;border-radius:6px
+}
+.btn-outline{
+background:none;border:2px solid white;padding:10px 20px;color:white;border-radius:6px;margin-left:10px
+}
+.hero-card{
+background:#ffffff22;padding:20px;border-radius:12px
+}
+
+/* PRICING */
+.pricing{
+display:flex;
+justify-content:center;
+gap:30px;
+margin-top:40px;
+}
+.price-card{
+background:white;padding:25px;border-radius:15px;
+box-shadow:0 5px 20px #0001;
+text-align:center;
+width:220px
+}
+.price-card.active{
+border:2px solid #1e90ff
+}
+.price-card button{
+margin-top:10px;
+background:#1e90ff;border:none;color:white;padding:8px 12px;border-radius:6px
+}
+
+/* MODAL */
+.modal-bg{
+position:fixed;top:0;left:0;width:100%;height:100%;
+background:#0008;display:flex;align-items:center;justify-content:center;
+}
+.modal{
+background:white;padding:25px;border-radius:12px;width:320px;text-align:center
+}
+.modal input{
+width:100%;margin:5px 0;padding:8px
+}
+.modal button{
+background:#1e90ff;border:none;color:white;padding:8px;width:100%;border-radius:6px
+}
+.msg{color:red;font-size:14px}
+
+/* DASHBOARD */
+.dashboard{
+display:flex;justify-content:center;margin-top:50px
+}
+.dash-card{
+background:white;padding:30px;border-radius:15px;
+box-shadow:0 10px 30px #0001;
+width:420px;text-align:center
+}
+.dash-buttons button{
+margin:5px;padding:8px 12px;border:none;border-radius:6px;
+background:#1e90ff;color:white
+}
+.dash-buttons button:disabled{
+background:gray
+}
