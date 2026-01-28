@@ -2,79 +2,54 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Contact - CloudStoragePro</title>
+<title>Contact – CloudStoragePro</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<link rel="stylesheet" href="/styles.css">
 <style>
-body{
-  margin:0;
-  font-family: Arial, sans-serif;
-  background: linear-gradient(135deg,#0b5ed7,#1e90ff);
+.contact-wrapper{
+  min-height:100vh;
   display:flex;
   justify-content:center;
   align-items:center;
-  height:100vh;
+  background:#f5f7fb;
 }
-
-.contactBox{
-  background:white;
-  padding:40px;
+.contact-box{
+  background:#fff;
+  padding:30px;
   border-radius:16px;
-  box-shadow:0 10px 30px rgba(0,0,0,0.25);
   width:100%;
-  max-width:520px;
-  text-align:center;
+  max-width:420px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.1);
 }
-
-.contactBox h1{
-  color:#0b5ed7;
-  margin-bottom:10px;
-}
-
-.contactBox p{
-  color:#555;
-  margin-bottom:25px;
-}
-
-.contactBox input,
-.contactBox textarea{
+.contact-box h2{text-align:center;margin-bottom:20px;}
+.contact-box input,.contact-box textarea{
   width:100%;
-  margin-bottom:15px;
-  padding:14px;
+  padding:10px;
+  margin-bottom:12px;
   border-radius:8px;
   border:1px solid #ddd;
-  font-size:15px;
 }
-
-.contactBox button{
+.contact-box button{
+  width:100%;
+  padding:12px;
   background:#0b5ed7;
-  color:white;
+  color:#fff;
   border:none;
-  padding:12px 25px;
   border-radius:8px;
-  font-size:15px;
   cursor:pointer;
-}
-
-.contactBox button:hover{
-  background:#084298;
 }
 </style>
 </head>
 <body>
 
-<div class="contactBox">
-  <h1>Contactez-nous</h1>
-  <p>Nous répondrons rapidement à votre message.</p>
+<div class="contact-wrapper">
+  <form class="contact-box"
+        action="https://formsubmit.co/contact@michaelcreation.fr"
+        method="POST">
 
-  <form 
-    action="https://formsubmit.co/contact@michaelcreation.fr"
-    method="POST"
-  >
-    <!-- Anti spam -->
+    <h2>Contactez-nous</h2>
+
     <input type="hidden" name="_captcha" value="false">
-
-    <!-- Redirection après envoi -->
     <input type="hidden" name="_next" value="https://cloudstoragepro.vercel.app/merci.html">
 
     <input name="name" placeholder="Nom" required>
