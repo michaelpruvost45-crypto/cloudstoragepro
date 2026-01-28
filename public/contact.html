@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Contact - CloudStoragePro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{
+  margin:0;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg,#0b5ed7,#1e90ff);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+
+.contactBox{
+  background:white;
+  padding:40px;
+  border-radius:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.25);
+  width:100%;
+  max-width:520px;
+  text-align:center;
+}
+
+.contactBox h1{
+  color:#0b5ed7;
+  margin-bottom:10px;
+}
+
+.contactBox p{
+  color:#555;
+  margin-bottom:25px;
+}
+
+.contactBox input,
+.contactBox textarea{
+  width:100%;
+  margin-bottom:15px;
+  padding:14px;
+  border-radius:8px;
+  border:1px solid #ddd;
+  font-size:15px;
+}
+
+.contactBox button{
+  background:#0b5ed7;
+  color:white;
+  border:none;
+  padding:12px 25px;
+  border-radius:8px;
+  font-size:15px;
+  cursor:pointer;
+}
+
+.contactBox button:hover{
+  background:#084298;
+}
+</style>
+</head>
+<body>
+
+<div class="contactBox">
+  <h1>Contactez-nous</h1>
+  <p>Nous répondrons rapidement à votre message.</p>
+
+  <form 
+    action="https://formsubmit.co/contact@michaelcreation.fr"
+    method="POST"
+  >
+    <!-- Anti spam -->
+    <input type="hidden" name="_captcha" value="false">
+
+    <!-- Redirection après envoi -->
+    <input type="hidden" name="_next" value="https://cloudstoragepro.vercel.app/merci.html">
+
+    <input name="name" placeholder="Nom" required>
+    <input name="email" type="email" placeholder="Email" required>
+    <textarea name="message" placeholder="Message" rows="5" required></textarea>
+
+    <button type="submit">Envoyer</button>
+  </form>
+</div>
+
+</body>
+</html>
