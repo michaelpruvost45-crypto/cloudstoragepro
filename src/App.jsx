@@ -33,10 +33,7 @@ export default function App() {
 
       <Hero onOpenAuth={() => setOpenAuth(true)} />
       <Services />
-      <Pricing
-        isLoggedIn={isLoggedIn}
-        onOpenAuth={() => setOpenAuth(true)}
-      />
+      <Pricing isLoggedIn={isLoggedIn} onOpenAuth={() => setOpenAuth(true)} />
       <Contact />
       <Footer />
 
@@ -93,13 +90,17 @@ function Hero({ onOpenAuth }) {
             Pour Vos Données
           </h1>
           <p>
-            Stockez et sauvegardez vos fichiers en toute sécurité sur notre
-            plateforme CloudStoragePro.
+            Stockez et sauvegardez vos fichiers en toute sécurité sur notre plateforme
+            CloudStoragePro.
           </p>
 
           <div className="hero__cta">
-            <a className="btn btn--primary" href="#pricing">Voir les abonnements</a>
-            <button className="btn btn--ghost" onClick={onOpenAuth}>Connexion</button>
+            <a className="btn btn--primary" href="#pricing">
+              Voir les abonnements
+            </a>
+            <button className="btn btn--ghost" onClick={onOpenAuth}>
+              Connexion
+            </button>
           </div>
         </div>
 
@@ -126,7 +127,7 @@ function Services() {
   const items = [
     { title: "Stockage Évolutif", desc: "Espace extensible selon vos besoins", icon: "☁️" },
     { title: "Sécurité Avancée", desc: "Cryptage & protection de vos données", icon: "🛡️" },
-    { title: "Accès 24/7", desc: "Accédez à vos fichiers à tout moment", icon: "⏱️" },
+    { title: "Accès 24/7", desc: "Accédez à vos fichiers à tout moment", icon: "⏱️" }
   ];
 
   return (
@@ -265,7 +266,9 @@ function AuthModal({ onClose, onLoggedIn }) {
   return (
     <div className="modalOverlay" role="dialog" aria-modal="true">
       <div className="modalCard">
-        <button className="modalClose" onClick={onClose} aria-label="Fermer">✕</button>
+        <button className="modalClose" onClick={onClose} aria-label="Fermer">
+          ✕
+        </button>
         <AuthForm onLoggedIn={onLoggedIn} />
       </div>
     </div>
@@ -300,14 +303,40 @@ function AuthForm({ onLoggedIn }) {
       if (error) throw error;
 
       const user = data?.user;
+
       if (user && user.email_confirmed_at === null) {
-        setMsg("⚠️ Ton email n’est pas encore confirmé. Vérifie ton email puis réessaie.");
+        setMsg("⚠️ Ton email n’est pas encore confirmé. Vérifie ta boîte mail (ou renvoie l’email).");
         return;
       }
 
       if (data?.session) onLoggedIn();
     } catch (err) {
       setMsg("❌ " + (err?.message || "Erreur"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    setMsg("");
+    setLoading(true);
+
+    try {
+      if (!email) throw new Error("Entre ton email d’abord.");
+
+      const redirectTo = window.location.origin;
+
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: redirectTo }
+      });
+
+      if (error) throw error;
+
+      setMsg("✅ Email de confirmation renvoyé ! Vérifie tes spams si besoin.");
+    } catch (err) {
+      setMsg("❌ " + (err?.message || "Impossible de renvoyer l’email"));
     } finally {
       setLoading(false);
     }
@@ -353,6 +382,18 @@ function AuthForm({ onLoggedIn }) {
         </button>
       </form>
 
+      {mode === "login" && (
+        <button
+          className="btn btn--ghost btn--full"
+          type="button"
+          onClick={resendConfirmation}
+          disabled={loading}
+          style={{ marginTop: 10 }}
+        >
+          Renvoyer l’email de confirmation
+        </button>
+      )}
+
       {msg && <div className="authMsg">{msg}</div>}
 
       <button
@@ -367,7 +408,7 @@ function AuthForm({ onLoggedIn }) {
       </button>
 
       <div className="authHint">
-        Pour l’email pro : active "Confirm email" dans Supabase (Authentication → Providers → Email).
+        Important : active "Confirm email" dans Supabase + configure "Site URL" (Authentication → URL Configuration).
       </div>
     </div>
   );
