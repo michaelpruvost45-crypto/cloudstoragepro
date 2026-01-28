@@ -1,97 +1,44 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
 <title>Merci</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body{
-    margin:0;
-    font-family: Arial, sans-serif;
-    background: linear-gradient(135deg,#0b5ed7,#1e90ff);
-    height:100vh;
-    overflow:hidden;
-  }
-  .overlay{
-    position:fixed;
-    inset:0;
-    background: rgba(0,0,0,0.45);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:18px;
-  }
-  .popup{
-    width:100%;
-    max-width:520px;
-    background:#fff;
-    border-radius:18px;
-    box-shadow:0 18px 60px rgba(0,0,0,0.35);
-    padding:28px 26px;
-    text-align:center;
-    position:relative;
-    animation: pop .18s ease-out;
-  }
-  @keyframes pop{
-    from{ transform: translateY(10px) scale(.98); opacity:0; }
-    to{ transform: translateY(0) scale(1); opacity:1; }
-  }
-  .x{
-    position:absolute;
-    right:12px;
-    top:10px;
-    border:none;
-    background:transparent;
-    font-size:22px;
-    cursor:pointer;
-    opacity:.6;
-  }
-  .x:hover{ opacity:1; }
-  .logo{
-    width:56px;
-    height:56px;
-    border-radius:14px;
-    object-fit:contain;
-    margin-bottom:10px;
-  }
-  h1{
-    margin:8px 0 8px;
-    color:#0b5ed7;
-    font-size:24px;
-  }
-  p{
-    margin:0 0 18px;
-    color:#444;
-    line-height:1.4;
-  }
-  .btn{
-    background:#0b5ed7;
-    color:#fff;
-    border:none;
-    padding:11px 18px;
-    border-radius:10px;
-    cursor:pointer;
-    font-size:15px;
-  }
-  .btn:hover{ background:#084298; }
+body{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  background:#f5f7fb;
+  font-family:Arial;
+}
+.popup{
+  background:#fff;
+  padding:30px 40px;
+  border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.15);
+  text-align:center;
+}
+.popup h2{color:#0b5ed7;}
+.popup a{
+  display:inline-block;
+  margin-top:15px;
+  background:#0b5ed7;
+  color:#fff;
+  padding:10px 18px;
+  border-radius:8px;
+  text-decoration:none;
+}
 </style>
 </head>
 <body>
 
-<div class="overlay" id="overlay">
-  <div class="popup">
-    <button class="x" aria-label="Fermer" onclick="goHome()">×</button>
-    <img class="logo" src="/logo.png" alt="CloudStoragePro" />
-    <h1>Merci pour votre message 🎉</h1>
-    <p>Nous avons bien reçu votre demande. Nous vous répondrons rapidement.</p>
-    <button class="btn" onclick="goHome()">Retour au site</button>
-  </div>
+<div class="popup">
+  <h2>✅ Message envoyé !</h2>
+  <p>Merci pour votre contact.<br>Nous vous répondrons rapidement.</p>
+  <a href="/">Retour au site</a>
 </div>
 
-<script>
-  function goHome(){
-    window.location.href = "/";
-  }
-</script>
 </body>
 </html>
