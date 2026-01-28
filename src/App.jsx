@@ -1,96 +1,139 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import logo from "/logo.png";
+import "./styles.css";
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [messageStatus, setMessageStatus] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [subscription, setSubscription] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Contact form state
   const [contact, setContact] = useState({
     name: "",
     email: "",
     message: ""
   });
+  const [contactStatus, setContactStatus] = useState("");
 
-  // Auth listener
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
-    });
-
+    getUser();
     supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) loadProfile(session.user.id);
     });
   }, []);
 
-  // Contact form state
-const [contact, setContact] = useState({
-  name: "",
-  email: "",
-  message: ""
-});
-const [messageStatus, setMessageStatus] = useState("");
-
-// Handle input
-function handleContactChange(e) {
-  setContact({ ...contact, [e.target.name]: e.target.value });
-}
-
-// Send message
-async function sendContact(e) {
-  e.preventDefault();
-  setMessageStatus("Envoi en cours...");
-
-  const { error } = await supabase.from("messages_contact").insert([
-    {
-      name: contact.name,
-      email: contact.email,
-      message: contact.message
+  async function getUser() {
+    const { data } = await supabase.auth.getUser();
+    if (data?.user) {
+      setUser(data.user);
+      await loadProfile(data.user.id);
     }
-  ]);
-
-  if (error) {
-    console.error("Supabase error:", error);
-    setMessageStatus("❌ Erreur : " + error.message);
-  } else {
-    setMessageStatus("✅ Message envoyé !");
-    setContact({ name: "", email: "", message: "" });
+    setLoading(false);
   }
-}
 
-  // Login simple
-  async function signIn() {
-    const email = prompt("Email :");
-    const password = prompt("Mot de passe :");
+  async function loadProfile(userId) {
+    const { data } = await supabase
+      .from("profils")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    setProfile(data);
+
+    const { data: sub } = await supabase
+      .from("demandes_abonnement")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    setSubscription(sub);
+  }
+
+  // ---------- AUTH ----------
+  async function signIn(email, password) {
     await supabase.auth.signInWithPassword({ email, password });
   }
 
   async function signOut() {
     await supabase.auth.signOut();
+    setProfile(null);
+    setSubscription(null);
   }
+
+  // ---------- SUBSCRIPTION ----------
+  async function requestSubscription(plan) {
+    if (!user) return alert("Connecte-toi d'abord");
+
+    await supabase.from("demandes_abonnement").insert({
+      user_id: user.id,
+      email: user.email,
+      plan
+    });
+
+    alert("✅ Demande envoyée à l'équipe technique.");
+    await loadProfile(user.id);
+  }
+
+  // ---------- CONTACT FORM ----------
+  function handleContactChange(e) {
+    setContact({ ...contact, [e.target.name]: e.target.value });
+  }
+
+  async function sendContact(e) {
+    e.preventDefault();
+    setContactStatus("Envoi...");
+
+    const { error } = await supabase.from("messages_contact").insert({
+      name: contact.name,
+      email: contact.email,
+      message: contact.message
+    });
+
+    if (error) {
+      console.error(error);
+      setContactStatus("❌ Erreur : " + error.message);
+    } else {
+      setContactStatus("✅ Message envoyé !");
+      setContact({ name: "", email: "", message: "" });
+    }
+  }
+
+  if (loading) return <p>Chargement...</p>;
 
   return (
     <>
-      {/* NAVBAR */}
-      <header className="nav">
-        <div className="logo">
-          <img src={logo} alt="CloudStoragePro" />
-          <span>CloudStoragePro</span>
-        </div>
+      {/* TOP BAR */}
+      <header className="topbar">
+        <div className="container topbar-inner">
+          <div className="logo">
+            <img src="/logo.png" alt="logo" />
+            <span>CloudStoragePro</span>
+          </div>
 
-        <nav>
-          <a href="#">Accueil</a>
-          <a href="#">Fonctionnalités</a>
-          <a href="#">Tarifs</a>
-          <a href="#">Contact</a>
-        </nav>
+          <nav>
+            <a href="#home">Accueil</a>
+            <a href="#features">Fonctionnalités</a>
+            <a href="#pricing">Tarifs</a>
+            <a href="#contact">Contact</a>
+          </nav>
 
-        <div>
           {user ? (
-            <button className="btn-outline" onClick={signOut}>
-              Déconnexion
-            </button>
+            <div className="userbox">
+              <div>
+                <strong>{profile?.prenom} {profile?.nom}</strong>
+                <div className="email">{user.email}</div>
+              </div>
+              <button onClick={signOut}>Déconnexion</button>
+            </div>
           ) : (
-            <button className="btn-outline" onClick={signIn}>
+            <button
+              onClick={() => signIn("test@email.com", "password")}
+              className="btn-outline"
+            >
               Connexion
             </button>
           )}
@@ -98,22 +141,21 @@ async function sendContact(e) {
       </header>
 
       {/* HERO */}
-      <section className="hero">
-        <div className="hero-left">
-          <h1>Stockage Cloud Sécurisé<br />Pour Vos Données</h1>
-          <p>
-            Stockez et sauvegardez vos fichiers en toute sécurité sur CloudStoragePro.
-          </p>
-
-          <div className="hero-buttons">
-            <button className="btn-primary">Voir les abonnements</button>
-            {!user && <button className="btn-outline" onClick={signIn}>Connexion</button>}
+      <section className="hero" id="home">
+        <div className="container hero-grid">
+          <div>
+            <h1>Stockage Cloud Sécurisé<br />Pour Vos Données</h1>
+            <p>
+              Stockez et sauvegardez vos fichiers en toute sécurité sur CloudStoragePro.
+            </p>
+            <div className="hero-buttons">
+              <a href="#pricing" className="btn-primary">Voir les abonnements</a>
+              {!user && <button className="btn-outline">Connexion</button>}
+            </div>
           </div>
-        </div>
 
-        <div className="hero-right">
-          <div className="cloud-card">
-            <img src={logo} alt="logo" />
+          <div className="hero-card">
+            <img src="/logo.png" alt="logo" className="hero-logo"/>
             <h3>Cloud sécurisé</h3>
             <p>Synchronisation & sauvegarde</p>
           </div>
@@ -122,64 +164,95 @@ async function sendContact(e) {
 
       {/* ESPACE CLIENT */}
       {user && (
-        <section className="client-space">
-          <h2>Espace client</h2>
-          <p>Bienvenue <strong>{user.email}</strong> 👋</p>
+        <section className="section-soft">
+          <div className="container client-box">
+            <h2>Espace client</h2>
+            <p>Bienvenue <strong>{profile?.prenom} {profile?.nom}</strong> 👋</p>
+            <p>{user.email}</p>
 
-          <div className="client-box">
-            <div>
-              <p><strong>Abonnement</strong></p>
-              <p>Aucun choisi</p>
+            <div className="client-cards">
+              <div className="card">
+                <h4>Abonnement</h4>
+                <p>{subscription?.plan || "Aucun choisi"}</p>
+              </div>
+              <div className="card">
+                <h4>Statut</h4>
+                <p>Connecté ✅</p>
+              </div>
             </div>
 
-            <div>
-              <p><strong>Statut</strong></p>
-              <p className="status-ok">Connecté ✅</p>
+            <div className="client-actions">
+              <button className="btn-outline">Modifier mon profil</button>
+              <button className="btn-primary">Changer mon abonnement</button>
+              <button className="btn-outline">Mes fichiers (bientôt)</button>
             </div>
-          </div>
-
-          <div className="client-actions">
-            <button className="btn-primary">Choisir / changer mon abonnement</button>
-            <button className="btn-outline">Mes fichiers (bientôt)</button>
           </div>
         </section>
       )}
 
+      {/* PRICING */}
+      <section id="pricing" className="section">
+        <div className="container pricing-grid">
+          {["Basique","Standard","Premium"].map((plan,i)=>(
+            <div className="price-card" key={i}>
+              <h3>{plan}</h3>
+              <p className="price">
+                {plan==="Basique" && "4,99€"}
+                {plan==="Standard" && "9,99€"}
+                {plan==="Premium" && "19,99€"}
+                <span>/mois</span>
+              </p>
+
+              {user ? (
+                <button onClick={()=>requestSubscription(plan)} className="btn-primary">
+                  Choisir cette offre
+                </button>
+              ) : (
+                <button className="btn-outline">Connexion</button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* CONTACT */}
-      <section className="contact-section">
-        <h2>Contactez-nous</h2>
+      <section id="contact" className="section-soft">
+        <div className="container">
+          <h2 className="section-title">Contactez-Nous</h2>
 
-        <form className="contact-form" onSubmit={sendContact}>
-          <input
-            name="name"
-            placeholder="Nom"
-            value={contact.name}
-            onChange={handleContactChange}
-            required
-          />
-          <input
-            name="email"
-            placeholder="Email"
-            value={contact.email}
-            onChange={handleContactChange}
-            required
-          />
-          <textarea
-            name="message"
-            placeholder="Message"
-            value={contact.message}
-            onChange={handleContactChange}
-            required
-          />
-          <button type="submit">Envoyer</button>
-        </form>
-
-        {messageStatus && <p className="status-message">{messageStatus}</p>}
+          <form className="contactForm" onSubmit={sendContact}>
+            <input
+              type="text"
+              name="name"
+              placeholder="Nom"
+              value={contact.name}
+              onChange={handleContactChange}
+              required
+            />
+            <input
+              type="email"
+              name="email"
+              placeholder="Email"
+              value={contact.email}
+              onChange={handleContactChange}
+              required
+            />
+            <textarea
+              name="message"
+              placeholder="Message"
+              value={contact.message}
+              onChange={handleContactChange}
+              required
+            />
+            <button type="submit">Envoyer</button>
+            {contactStatus && <p className="contact-status">{contactStatus}</p>}
+          </form>
+        </div>
       </section>
 
       {/* FOOTER */}
-      <footer>
-        © {new Date().getFullYear()} CloudStoragePro — Tous droits réservés
+      <footer className="footer">
+        © 2026 CloudStoragePro — Tous droits réservés
       </footer>
     </>
   );
