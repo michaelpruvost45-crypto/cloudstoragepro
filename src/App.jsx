@@ -1,136 +1,173 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import "./styles.css";
+import logo from "/logo.png";
 
 export default function App() {
-  // ------- FORMULAIRE CONTACT -------
-  const [contactName, setContactName] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactMessage, setContactMessage] = useState("");
-  const [contactLoading, setContactLoading] = useState(false);
-  const [contactStatus, setContactStatus] = useState({ type: "", text: "" });
+  const [user, setUser] = useState(null);
+  const [messageStatus, setMessageStatus] = useState("");
+  const [contact, setContact] = useState({
+    name: "",
+    email: "",
+    message: ""
+  });
 
-  const isContactValid = useMemo(() => {
-    const nameOk = contactName.trim().length >= 2;
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim());
-    const msgOk = contactMessage.trim().length >= 5;
-    return nameOk && emailOk && msgOk;
-  }, [contactName, contactEmail, contactMessage]);
+  // Auth listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+    });
 
-  async function handleContactSubmit(e) {
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+  }, []);
+
+  // Contact form
+  function handleContactChange(e) {
+    setContact({ ...contact, [e.target.name]: e.target.value });
+  }
+
+  async function sendContact(e) {
     e.preventDefault();
-    setContactStatus({ type: "", text: "" });
+    setMessageStatus("Envoi...");
 
-    if (!isContactValid) {
-      setContactStatus({
-        type: "error",
-        text: "Merci de remplir correctement le nom, l’email et le message.",
-      });
-      return;
-    }
+    const { error } = await supabase
+      .from("messages_contact")
+      .insert([contact]);
 
-    try {
-      setContactLoading(true);
-
-      const payload = {
-        name: contactName.trim(),
-        email: contactEmail.trim(),
-        message: contactMessage.trim(),
-      };
-
-      const { error } = await supabase.from("messages_contact").insert(payload);
-
-      if (error) {
-        // Souvent: RLS pas activé/policy manquante, ou table pas créée
-        throw new Error(error.message);
-      }
-
-      setContactStatus({
-        type: "success",
-        text: "✅ Message envoyé ! Nous vous répondrons rapidement.",
-      });
-
-      setContactName("");
-      setContactEmail("");
-      setContactMessage("");
-    } catch (err) {
-      setContactStatus({
-        type: "error",
-        text:
-          "❌ Impossible d’envoyer le message. Vérifie Supabase (table + RLS + policy). Détail: " +
-          (err?.message || "Erreur inconnue"),
-      });
-    } finally {
-      setContactLoading(false);
+    if (error) {
+      console.error(error);
+      setMessageStatus("❌ Erreur d'envoi");
+    } else {
+      setMessageStatus("✅ Message envoyé !");
+      setContact({ name: "", email: "", message: "" });
     }
   }
 
-  // ------- PAGE (tu peux garder ton design actuel) -------
-  // Ici je te mets une structure simple + la section Contact,
-  // si tu as déjà toute ta landing page, tu peux juste copier la section <section id="contact">…</section>
+  // Login simple
+  async function signIn() {
+    const email = prompt("Email :");
+    const password = prompt("Mot de passe :");
+    await supabase.auth.signInWithPassword({ email, password });
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+  }
 
   return (
-    <div className="page">
-      {/* ✅ Tu peux garder ton header / hero / tarifs etc. */}
-      {/* --- SECTION CONTACT --- */}
-      <section id="contact" className="contactSection">
-        <h2 className="sectionTitle">Contactez-Nous</h2>
+    <>
+      {/* NAVBAR */}
+      <header className="nav">
+        <div className="logo">
+          <img src={logo} alt="CloudStoragePro" />
+          <span>CloudStoragePro</span>
+        </div>
 
-        <div className="contactCard">
-          <form className="contactForm" onSubmit={handleContactSubmit}>
-            <input
-              className="input"
-              type="text"
-              placeholder="Nom"
-              value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
-              autoComplete="name"
-            />
+        <nav>
+          <a href="#">Accueil</a>
+          <a href="#">Fonctionnalités</a>
+          <a href="#">Tarifs</a>
+          <a href="#">Contact</a>
+        </nav>
 
-            <input
-              className="input"
-              type="email"
-              placeholder="Email"
-              value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
-              autoComplete="email"
-            />
-
-            <textarea
-              className="textarea"
-              placeholder="Message"
-              value={contactMessage}
-              onChange={(e) => setContactMessage(e.target.value)}
-              rows={5}
-            />
-
-            {contactStatus.text ? (
-              <div
-                className={
-                  contactStatus.type === "success"
-                    ? "alert success"
-                    : "alert error"
-                }
-              >
-                {contactStatus.text}
-              </div>
-            ) : null}
-
-            <button
-              className="btnPrimary"
-              type="submit"
-              disabled={contactLoading || !isContactValid}
-            >
-              {contactLoading ? "Envoi..." : "Envoyer"}
+        <div>
+          {user ? (
+            <button className="btn-outline" onClick={signOut}>
+              Déconnexion
             </button>
+          ) : (
+            <button className="btn-outline" onClick={signIn}>
+              Connexion
+            </button>
+          )}
+        </div>
+      </header>
 
-            <div className="hint">
-              Les messages sont enregistrés dans Supabase →{" "}
-              <b>messages_contact</b>.
-            </div>
-          </form>
+      {/* HERO */}
+      <section className="hero">
+        <div className="hero-left">
+          <h1>Stockage Cloud Sécurisé<br />Pour Vos Données</h1>
+          <p>
+            Stockez et sauvegardez vos fichiers en toute sécurité sur CloudStoragePro.
+          </p>
+
+          <div className="hero-buttons">
+            <button className="btn-primary">Voir les abonnements</button>
+            {!user && <button className="btn-outline" onClick={signIn}>Connexion</button>}
+          </div>
+        </div>
+
+        <div className="hero-right">
+          <div className="cloud-card">
+            <img src={logo} alt="logo" />
+            <h3>Cloud sécurisé</h3>
+            <p>Synchronisation & sauvegarde</p>
+          </div>
         </div>
       </section>
-    </div>
+
+      {/* ESPACE CLIENT */}
+      {user && (
+        <section className="client-space">
+          <h2>Espace client</h2>
+          <p>Bienvenue <strong>{user.email}</strong> 👋</p>
+
+          <div className="client-box">
+            <div>
+              <p><strong>Abonnement</strong></p>
+              <p>Aucun choisi</p>
+            </div>
+
+            <div>
+              <p><strong>Statut</strong></p>
+              <p className="status-ok">Connecté ✅</p>
+            </div>
+          </div>
+
+          <div className="client-actions">
+            <button className="btn-primary">Choisir / changer mon abonnement</button>
+            <button className="btn-outline">Mes fichiers (bientôt)</button>
+          </div>
+        </section>
+      )}
+
+      {/* CONTACT */}
+      <section className="contact-section">
+        <h2>Contactez-nous</h2>
+
+        <form className="contact-form" onSubmit={sendContact}>
+          <input
+            name="name"
+            placeholder="Nom"
+            value={contact.name}
+            onChange={handleContactChange}
+            required
+          />
+          <input
+            name="email"
+            placeholder="Email"
+            value={contact.email}
+            onChange={handleContactChange}
+            required
+          />
+          <textarea
+            name="message"
+            placeholder="Message"
+            value={contact.message}
+            onChange={handleContactChange}
+            required
+          />
+          <button type="submit">Envoyer</button>
+        </form>
+
+        {messageStatus && <p className="status-message">{messageStatus}</p>}
+      </section>
+
+      {/* FOOTER */}
+      <footer>
+        © {new Date().getFullYear()} CloudStoragePro — Tous droits réservés
+      </footer>
+    </>
   );
 }
