@@ -94,50 +94,24 @@ export default function App() {
         </div>
       </section>
 
-      {/* ===== CONTACT (FormSubmit) ===== */}
-      <section id="contact" className="section-soft">
-        <div className="container">
-          <h2 className="section-title">Contactez-nous</h2>
+      <form 
+  class="contactForm"
+  action="https://formsubmit.co/contact@michaelcreation.fr"
+  method="POST"
+>
+  <!-- Anti spam -->
+  <input type="hidden" name="_captcha" value="false">
 
-          <form
-            className="contactForm"
-            action="https://formsubmit.co/contact@michaelcreation.fr"
-            method="POST"
-          >
-            {/* Désactive captcha */}
-            <input type="hidden" name="_captcha" value="false" />
+  <!-- Page Merci -->
+  <input type="hidden" name="_next" value="https://cloudstoragepro.vercel.app/merci.html">
 
-            {/* Redirection après envoi */}
-            <input
-              type="hidden"
-              name="_next"
-              value="https://cloudstoragepro.vercel.app//merci.html"
-            />
+  <input name="name" placeholder="Nom" required>
+  <input name="email" type="email" placeholder="Email" required>
+  <textarea name="message" placeholder="Message" rows="5" required></textarea>
 
-            <input
-              type="text"
-              name="name"
-              placeholder="Votre nom"
-              required
-            />
+  <button type="submit">Envoyer</button>
+</form>
 
-            <input
-              type="email"
-              name="email"
-              placeholder="Votre email"
-              required
-            />
-
-            <textarea
-              name="message"
-              placeholder="Votre message"
-              required
-            ></textarea>
-
-            <button type="submit">Envoyer</button>
-          </form>
-        </div>
-      </section>
 
       {/* ===== FOOTER ===== */}
       <footer className="footer">
