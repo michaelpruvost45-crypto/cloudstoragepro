@@ -222,7 +222,7 @@ function Pricing({ onOpenAuth, isLoggedIn }) {
 
         <div className="note">
           <strong>Note :</strong>{" "}
-          {isLoggedIn ? "Tu es connecté ✅" : "Connecte-toi pour choisir une offre."}
+          {isLoggedIn ? "Tu es connecté ✅ (tu peux choisir un abonnement)" : "Connecte-toi pour choisir une offre."}
         </div>
       </div>
     </section>
@@ -276,7 +276,9 @@ function AuthModal({ onClose, onLoggedIn }) {
 }
 
 function AuthForm({ onLoggedIn }) {
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState("login"); // login | signup | forgot
+  const [firstName, setFirstName] = useState(""); // signup
+  const [lastName, setLastName] = useState(""); // signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -288,24 +290,52 @@ function AuthForm({ onLoggedIn }) {
     setLoading(true);
 
     try {
-      if (!email || !password) throw new Error("Ajoute un email et un mot de passe.");
+      if (!email) throw new Error("Ajoute un email.");
 
+      // ✅ MOT DE PASSE OUBLIÉ
+      if (mode === "forgot") {
+        const redirectTo = window.location.origin;
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) throw error;
+
+        setMsg("✅ Email envoyé. Clique sur le lien dans ton mail pour changer ton mot de passe.");
+        return;
+      }
+
+      if (!password) throw new Error("Ajoute un mot de passe.");
+
+      // ✅ INSCRIPTION + PRENOM / NOM
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
+        if (!firstName.trim()) throw new Error("Ajoute ton prénom.");
+        if (!lastName.trim()) throw new Error("Ajoute ton nom.");
+
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              first_name: firstName.trim(),
+              last_name: lastName.trim()
+            }
+          }
+        });
+
         if (error) throw error;
 
         setMsg("✅ Compte créé. Un email de confirmation a été envoyé. Vérifie ta boîte mail !");
         setMode("login");
+        setPassword("");
         return;
       }
 
+      // ✅ CONNEXION
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
       const user = data?.user;
 
       if (user && user.email_confirmed_at === null) {
-        setMsg("⚠️ Ton email n’est pas encore confirmé. Vérifie ta boîte mail (ou renvoie l’email).");
+        setMsg("⚠️ Ton email n’est pas confirmé. Vérifie ta boîte mail (ou renvoie l’email).");
         return;
       }
 
@@ -352,9 +382,36 @@ function AuthForm({ onLoggedIn }) {
         </div>
       </div>
 
-      <h3 className="authTitle">{mode === "login" ? "Connexion" : "Créer un compte"}</h3>
+      <h3 className="authTitle">
+        {mode === "login" ? "Connexion" : mode === "signup" ? "Créer un compte" : "Mot de passe oublié"}
+      </h3>
 
       <form onSubmit={submit}>
+        {/* ✅ Champs prénom/nom seulement en signup */}
+        {mode === "signup" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label className="authLabel">
+              Prénom
+              <input
+                className="authInput"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="ex: Michael"
+              />
+            </label>
+
+            <label className="authLabel">
+              Nom
+              <input
+                className="authInput"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="ex: Pruvost"
+              />
+            </label>
+          </div>
+        )}
+
         <label className="authLabel">
           Email
           <input
@@ -366,49 +423,97 @@ function AuthForm({ onLoggedIn }) {
           />
         </label>
 
-        <label className="authLabel">
-          Mot de passe
-          <input
-            className="authInput"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-        </label>
+        {/* Mot de passe seulement si login/signup */}
+        {mode !== "forgot" && (
+          <label className="authLabel">
+            Mot de passe
+            <input
+              className="authInput"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+          </label>
+        )}
 
         <button className="btn btn--primary btn--full" type="submit" disabled={loading}>
-          {loading ? "Patiente..." : mode === "login" ? "Se connecter" : "Créer mon compte"}
+          {loading
+            ? "Patiente..."
+            : mode === "login"
+            ? "Se connecter"
+            : mode === "signup"
+            ? "Créer mon compte"
+            : "Envoyer l’email"}
         </button>
       </form>
 
+      {/* ✅ SOUS LA CONNEXION: mot de passe oublié PUIS renvoyer mail */}
       {mode === "login" && (
+        <>
+          <button
+            className="authSwitch"
+            type="button"
+            onClick={() => {
+              setMsg("");
+              setMode("forgot");
+            }}
+          >
+            Mot de passe oublié ?
+          </button>
+
+          <button
+            className="authSwitch"
+            type="button"
+            onClick={resendConfirmation}
+            disabled={loading}
+          >
+            Renvoyer l’email de confirmation
+          </button>
+
+          <button
+            className="authSwitch"
+            type="button"
+            onClick={() => {
+              setMsg("");
+              setMode("signup");
+            }}
+          >
+            Créer un compte
+          </button>
+        </>
+      )}
+
+      {mode === "signup" && (
         <button
-          className="btn btn--ghost btn--full"
+          className="authSwitch"
           type="button"
-          onClick={resendConfirmation}
-          disabled={loading}
-          style={{ marginTop: 10 }}
+          onClick={() => {
+            setMsg("");
+            setMode("login");
+          }}
         >
-          Renvoyer l’email de confirmation
+          J’ai déjà un compte
+        </button>
+      )}
+
+      {mode === "forgot" && (
+        <button
+          className="authSwitch"
+          type="button"
+          onClick={() => {
+            setMsg("");
+            setMode("login");
+          }}
+        >
+          Retour à la connexion
         </button>
       )}
 
       {msg && <div className="authMsg">{msg}</div>}
 
-      <button
-        className="authSwitch"
-        onClick={() => {
-          setMsg("");
-          setMode(mode === "login" ? "signup" : "login");
-        }}
-        type="button"
-      >
-        {mode === "login" ? "Créer un compte" : "J’ai déjà un compte"}
-      </button>
-
       <div className="authHint">
-        Important : active "Confirm email" dans Supabase + configure "Site URL" (Authentication → URL Configuration).
+        Important : Supabase → Authentication → URL Configuration : mets ton URL Vercel dans Site URL + Redirect URLs.
       </div>
     </div>
   );
