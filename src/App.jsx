@@ -665,25 +665,36 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
    ========================= */
 
 function Contact() {
+  const [sent, setSent] = useState(false);
+
+  function handleSubmit() {
+    // Affiche la popup après envoi
+    setTimeout(() => {
+      setSent(true);
+    }, 200);
+  }
+
   return (
     <section id="contact" className="section">
       <div className="container">
         <h2 className="section__title">Contactez-Nous</h2>
 
+        {/* iframe caché pour éviter la redirection */}
+        <iframe
+          name="hiddenFrame"
+          style={{ display: "none" }}
+        ></iframe>
+
         <form
           className="contactForm"
           action="https://formsubmit.co/contact@michaelcreation.fr"
           method="POST"
+          target="hiddenFrame"
+          onSubmit={handleSubmit}
         >
-          {/* Anti-spam */}
+          {/* options FormSubmit */}
           <input type="hidden" name="_captcha" value="false" />
-
-          {/* Message de confirmation */}
-          <input
-            type="hidden"
-            name="_next"
-            value="https://cloudstoragepro.vercel.app/?sent=ok"
-          />
+          <input type="hidden" name="_subject" value="Nouveau message CloudStoragePro" />
 
           <input
             className="input"
@@ -714,9 +725,30 @@ function Contact() {
           </button>
         </form>
       </div>
+
+      {/* ===== POPUP MERCI ===== */}
+      {sent && (
+        <div className="modalOverlay">
+          <div className="modalCard">
+            <h3>✅ Merci pour votre message !</h3>
+            <p>
+              Votre demande a bien été envoyée.  
+              Nous vous répondrons dans les plus brefs délais.
+            </p>
+
+            <button
+              className="btn btn--primary"
+              onClick={() => setSent(false)}
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
+
 
 
 function Footer() {
