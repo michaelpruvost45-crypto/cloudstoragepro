@@ -670,10 +670,45 @@ function Contact() {
       <div className="container">
         <h2 className="section__title">Contactez-Nous</h2>
 
-        <form className="contactForm" onSubmit={(e) => e.preventDefault()}>
-          <input className="input" placeholder="Nom" />
-          <input className="input" placeholder="Email" />
-          <textarea className="textarea" placeholder="Message" rows={5} />
+        <form
+          className="contactForm"
+          action="https://formsubmit.co/contact@michaelcreation.fr"
+          method="POST"
+        >
+          {/* Anti-spam */}
+          <input type="hidden" name="_captcha" value="false" />
+
+          {/* Message de confirmation */}
+          <input
+            type="hidden"
+            name="_next"
+            value="https://cloudstoragepro.vercel.app/?sent=ok"
+          />
+
+          <input
+            className="input"
+            type="text"
+            name="name"
+            placeholder="Nom"
+            required
+          />
+
+          <input
+            className="input"
+            type="email"
+            name="email"
+            placeholder="Email"
+            required
+          />
+
+          <textarea
+            className="textarea"
+            name="message"
+            placeholder="Message"
+            rows={5}
+            required
+          />
+
           <button className="btn btn--primary btn--center" type="submit">
             Envoyer
           </button>
@@ -682,6 +717,7 @@ function Contact() {
     </section>
   );
 }
+
 
 function Footer() {
   return (
