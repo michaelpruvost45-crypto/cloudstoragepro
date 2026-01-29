@@ -663,31 +663,49 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
 /* =========================
    CONTACT / FOOTER
    ========================= */
+
 function Contact() {
   const [popupOpen, setPopupOpen] = useState(false);
   const [sending, setSending] = useState(false);
 
-  // Affiche la popup uniquement après une soumission (pas au chargement initial)
-  const hasSubmittedRef = useRef(false);
+  // Compteurs pour ignorer le premier onLoad de l’iframe (au montage)
+  const [submitCount, setSubmitCount] = useState(0);
+  const [loadCount, setLoadCount] = useState(0);
+
+  function handleSubmit() {
+    // Lance l’envoi (le form s’envoie vraiment vers FormSubmit)
+    setSending(true);
+    setSubmitCount((n) => n + 1);
+
+    // Sécurité : si FormSubmit/iframe ne répond pas, on débloque le bouton
+    setTimeout(() => setSending(false), 8000);
+  }
+
+  function handleIframeLoad() {
+    // L’iframe charge aussi au montage: on ignore tant qu’il n’y a pas eu de soumission
+    if (submitCount === 0) return;
+
+    // On n’affiche la popup que si un nouveau “load” correspond à une soumission
+    if (loadCount < submitCount) {
+      setLoadCount((n) => n + 1);
+      setSending(false);
+      setPopupOpen(true);
+      // fermeture auto 5s
+      setTimeout(() => setPopupOpen(false), 5000);
+    }
+  }
 
   return (
     <section id="contact" className="section">
       <div className="container">
         <h2 className="section__title">Contactez-Nous</h2>
 
-        {/* Iframe caché : le formulaire se charge dedans, ta page ne bouge pas */}
+        {/* Iframe caché = pas de redirection */}
         <iframe
           name="hidden_iframe"
           title="hidden_iframe"
           style={{ display: "none" }}
-          onLoad={() => {
-            // OnLoad se déclenche aussi au montage, donc on protège
-            if (hasSubmittedRef.current) {
-              setSending(false);
-              setPopupOpen(true);
-              hasSubmittedRef.current = false;
-            }
-          }}
+          onLoad={handleIframeLoad}
         />
 
         <form
@@ -695,13 +713,8 @@ function Contact() {
           action="https://formsubmit.co/contact@michaelcreation.fr"
           method="POST"
           target="hidden_iframe"
-          onSubmit={(e) => {
-            // On laisse l’envoi normal partir vers FormSubmit
-            setSending(true);
-            hasSubmittedRef.current = true;
-          }}
+          onSubmit={handleSubmit}
         >
-          {/* Options FormSubmit */}
           <input type="hidden" name="_captcha" value="false" />
           <input
             type="hidden"
@@ -747,9 +760,14 @@ function Contact() {
         </form>
       </div>
 
-      {/* POPUP MERCI */}
+      {/* Popup Merci */}
       {popupOpen && (
-        <div className="modalOverlay" role="dialog" aria-modal="true" onClick={() => setPopupOpen(false)}>
+        <div
+          className="modalOverlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPopupOpen(false)}
+        >
           <div className="modalCard" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <button className="modalClose" onClick={() => setPopupOpen(false)} aria-label="Fermer">
               ✕
