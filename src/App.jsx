@@ -667,11 +667,17 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
 function Contact() {
   const [sent, setSent] = useState(false);
 
-  function handleSubmit() {
-    // Affiche la popup après envoi
+  function handleSubmit(e) {
+    // vide le formulaire après envoi
+    e.target.reset();
+
+    // affiche la popup
+    setSent(true);
+
+    // fermeture automatique après 5 sec
     setTimeout(() => {
-      setSent(true);
-    }, 200);
+      setSent(false);
+    }, 5000);
   }
 
   return (
@@ -680,10 +686,7 @@ function Contact() {
         <h2 className="section__title">Contactez-Nous</h2>
 
         {/* iframe caché pour éviter la redirection */}
-        <iframe
-          name="hiddenFrame"
-          style={{ display: "none" }}
-        ></iframe>
+        <iframe name="hiddenFrame" style={{ display: "none" }}></iframe>
 
         <form
           className="contactForm"
@@ -692,9 +695,13 @@ function Contact() {
           target="hiddenFrame"
           onSubmit={handleSubmit}
         >
-          {/* options FormSubmit */}
+          {/* Options FormSubmit */}
           <input type="hidden" name="_captcha" value="false" />
-          <input type="hidden" name="_subject" value="Nouveau message CloudStoragePro" />
+          <input
+            type="hidden"
+            name="_subject"
+            value="Nouveau message CloudStoragePro"
+          />
 
           <input
             className="input"
@@ -730,10 +737,11 @@ function Contact() {
       {sent && (
         <div className="modalOverlay">
           <div className="modalCard">
-            <h3>✅ Merci pour votre message !</h3>
+            <div className="successIcon">✓</div>
+            <h3>Merci pour votre message !</h3>
             <p>
               Votre demande a bien été envoyée.  
-              Nous vous répondrons dans les plus brefs délais.
+              Nous vous répondrons rapidement.
             </p>
 
             <button
@@ -742,12 +750,17 @@ function Contact() {
             >
               Fermer
             </button>
+
+            <div className="autoClose">
+              Fermeture automatique dans 5 secondes…
+            </div>
           </div>
         </div>
       )}
     </section>
   );
 }
+
 
 
 
