@@ -666,43 +666,11 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
 
 function Contact() {
   const [sent, setSent] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setErrorMsg("");
-    setSending(true);
-
-    try {
-      const form = e.currentTarget;
-      const data = new FormData(form);
-
-      // IMPORTANT: endpoint FormSubmit
-      const res = await fetch("https://formsubmit.co/ajax/contact@michaelcreation.fr", {
-        method: "POST",
-        body: data,
-        headers: { Accept: "application/json" }
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(
-          (json && (json.message || json.error)) ||
-            `Erreur FormSubmit (HTTP ${res.status})`
-        );
-      }
-
-      // OK
-      form.reset();
-      setSent(true);
-      setTimeout(() => setSent(false), 5000);
-    } catch (err) {
-      setErrorMsg(err?.message || "Erreur inconnue");
-    } finally {
-      setSending(false);
-    }
+  function handleSubmit() {
+    // Affiche popup après envoi (le vrai envoi part dans l'iframe)
+    setSent(true);
+    setTimeout(() => setSent(false), 5000);
   }
 
   return (
@@ -710,43 +678,33 @@ function Contact() {
       <div className="container">
         <h2 className="section__title">Contactez-Nous</h2>
 
-        <form className="contactForm" onSubmit={handleSubmit}>
+        {/* Iframe caché pour éviter la redirection */}
+        <iframe
+          name="hidden_iframe"
+          title="hidden_iframe"
+          style={{ display: "none" }}
+        />
+
+        <form
+          className="contactForm"
+          action="https://formsubmit.co/contact@michaelcreation.fr"
+          method="POST"
+          target="hidden_iframe"
+          onSubmit={handleSubmit}
+        >
           <input type="hidden" name="_captcha" value="false" />
           <input type="hidden" name="_subject" value="Nouveau message CloudStoragePro" />
 
-          <input
-            className="input"
-            type="text"
-            name="name"
-            placeholder="Nom"
-            required
-          />
+          {/* IMPORTANT: active l'email chez FormSubmit (sinon pas d'envoi) */}
+          <input type="hidden" name="_template" value="table" />
 
-          <input
-            className="input"
-            type="email"
-            name="email"
-            placeholder="Email"
-            required
-          />
+          <input className="input" name="name" placeholder="Nom" required />
+          <input className="input" type="email" name="email" placeholder="Email" required />
+          <textarea className="textarea" name="message" placeholder="Message" rows={5} required />
 
-          <textarea
-            className="textarea"
-            name="message"
-            placeholder="Message"
-            rows={5}
-            required
-          />
-
-          <button className="btn btn--primary btn--center" type="submit" disabled={sending}>
-            {sending ? "Envoi..." : "Envoyer"}
+          <button className="btn btn--primary btn--center" type="submit">
+            Envoyer
           </button>
-
-          {errorMsg && (
-            <div style={{ marginTop: 10, color: "#ff5a5a", fontWeight: 800 }}>
-              ❌ {errorMsg}
-            </div>
-          )}
         </form>
       </div>
 
@@ -755,12 +713,10 @@ function Contact() {
           <div className="modalCard">
             <div className="successIcon">✓</div>
             <h3>Merci pour votre message !</h3>
-            <p>Votre demande a bien été envoyée. Nous vous répondrons rapidement.</p>
-
+            <p>Votre demande a bien été envoyée.</p>
             <button className="btn btn--primary" onClick={() => setSent(false)}>
               Fermer
             </button>
-
             <div className="autoClose">Fermeture automatique dans 5 secondes…</div>
           </div>
         </div>
@@ -768,6 +724,7 @@ function Contact() {
     </section>
   );
 }
+
 
 
 
