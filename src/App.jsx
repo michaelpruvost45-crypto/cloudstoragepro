@@ -1,87 +1,104 @@
-import { useState } from "react";
 import "./styles.css";
+import logo from "/logo.png";
 
 export default function App() {
-  const [sent, setSent] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setLoading(true);
-
-    const form = e.target;
-    const data = new FormData(form);
-
-    try {
-      const res = await fetch("https://formspree.io/f/XXXXX", {
-        method: "POST",
-        body: data,
-        headers: { Accept: "application/json" },
-      });
-
-      if (res.ok) {
-        setSent(true);
-        form.reset();
-      } else {
-        alert("Erreur lors de l'envoi du message.");
-      }
-    } catch (err) {
-      alert("Erreur réseau.");
-    }
-
-    setLoading(false);
-  }
-
   return (
-    <div>
-      {/* SECTION CONTACT */}
+    <>
+      {/* ===== HEADER ===== */}
+      <header className="topbar">
+        <div className="container topbar-inner">
+          <div className="logo">
+            <img src={logo} alt="CloudStoragePro" />
+            <span>CloudStoragePro</span>
+          </div>
 
-      <section id="contact" className="section">
-        <div className="container">
+          <nav>
+            <a href="#home">Accueil</a>
+            <a href="#features">Fonctionnalités</a>
+            <a href="#pricing">Tarifs</a>
+            {/* lien vers vraie page contact */}
+            <a href="/contact.html">Contact</a>
+          </nav>
 
-          {!sent ? (
-            <>
-              <h2 className="section_title">Contactez-Nous</h2>
+          <button className="btn-outline">Connexion</button>
+        </div>
+      </header>
 
-              <form className="contactForm" onSubmit={handleSubmit}>
-                <input
-                  name="name"
-                  placeholder="Nom"
-                  required
-                />
+      {/* ===== HERO ===== */}
+      <section className="hero" id="home">
+        <div className="container hero-grid">
+          <div>
+            <h1>
+              Stockage Cloud Sécurisé <br /> Pour Vos Données
+            </h1>
+            <p>
+              Sauvegardez et accédez à vos fichiers partout, en toute sécurité.
+            </p>
 
-                <input
-                  name="email"
-                  type="email"
-                  placeholder="Email"
-                  required
-                />
-
-                <textarea
-                  name="message"
-                  placeholder="Message"
-                  rows="5"
-                  required
-                ></textarea>
-
-                <button type="submit" disabled={loading}>
-                  {loading ? "Envoi..." : "Envoyer"}
-                </button>
-              </form>
-            </>
-          ) : (
-            <div className="thankyou">
-              <h2>✅ Merci pour votre message</h2>
-              <p>Nous vous répondrons dans les plus brefs délais.</p>
-
-              <button onClick={() => setSent(false)}>
-                Envoyer un autre message
-              </button>
+            <div className="hero-buttons">
+              <a href="#pricing" className="btn-primary">
+                Voir les abonnements
+              </a>
+              <button className="btn-outline">Connexion</button>
             </div>
-          )}
+          </div>
 
+          <div className="hero-card">
+            <img src={logo} alt="logo" className="hero-logo" />
+            <h3>Cloud sécurisé</h3>
+            <p>Synchronisation & sauvegarde</p>
+          </div>
         </div>
       </section>
-    </div>
+
+      {/* ===== FEATURES ===== */}
+      <section id="features" className="section-soft">
+        <div className="container">
+          <h2 className="section-title">Pourquoi CloudStoragePro ?</h2>
+
+          <div className="features-grid">
+            <div className="card">🔒 Sécurité maximale</div>
+            <div className="card">☁️ Stockage cloud privé</div>
+            <div className="card">⚡ Accès rapide partout</div>
+            <div className="card">💾 Sauvegarde automatique</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== PRICING ===== */}
+      <section id="pricing" className="section">
+        <div className="container">
+          <h2 className="section-title">Nos Abonnements</h2>
+
+          <div className="pricing-grid">
+            <div className="price-card">
+              <h3>Basic</h3>
+              <p className="price">4.99€<span>/mois</span></p>
+              <p>100 Go de stockage</p>
+              <button className="btn-primary">Choisir</button>
+            </div>
+
+            <div className="price-card popular">
+              <h3>Pro</h3>
+              <p className="price">9.99€<span>/mois</span></p>
+              <p>1 To de stockage</p>
+              <button className="btn-primary">Choisir</button>
+            </div>
+
+            <div className="price-card">
+              <h3>Premium</h3>
+              <p className="price">19.99€<span>/mois</span></p>
+              <p>3 To de stockage</p>
+              <button className="btn-primary">Choisir</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== FOOTER ===== */}
+      <footer className="footer">
+        © {new Date().getFullYear()} CloudStoragePro — Tous droits réservés
+      </footer>
+    </>
   );
 }
