@@ -667,53 +667,41 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
 function Contact() {
   const [popupOpen, setPopupOpen] = useState(false);
   const [sending, setSending] = useState(false);
-  const [err, setErr] = useState("");
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    setErr("");
-    setSending(true);
-
-    try {
-      const form = e.currentTarget;
-      const formData = new FormData(form);
-
-      // IMPORTANT : ton email FormSubmit
-      const endpoint = "https://formsubmit.co/ajax/contact@michaelcreation.fr";
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        body: formData,
-      });
-
-      // FormSubmit renvoie du JSON en /ajax
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        // Message plus clair
-        const msg =
-          (data && (data.message || data.error)) ||
-          "Impossible d’envoyer. Vérifie l’activation FormSubmit + Internet.";
-        throw new Error(msg);
-      }
-
-      // OK => popup + reset
-      form.reset();
-      setPopupOpen(true);
-    } catch (e2) {
-      console.error(e2);
-      setErr(e2?.message || "Erreur lors de l’envoi.");
-    } finally {
-      setSending(false);
-    }
-  }
+  // Affiche la popup uniquement après une soumission (pas au chargement initial)
+  const hasSubmittedRef = useState(false)[0];
 
   return (
     <section id="contact" className="section">
       <div className="container">
         <h2 className="section__title">Contactez-Nous</h2>
 
-        <form className="contactForm" onSubmit={onSubmit}>
+        {/* Iframe caché : le formulaire se charge dedans, ta page ne bouge pas */}
+        <iframe
+          name="hidden_iframe"
+          title="hidden_iframe"
+          style={{ display: "none" }}
+          onLoad={() => {
+            // OnLoad se déclenche aussi au montage, donc on protège
+            if (hasSubmittedRef.current) {
+              setSending(false);
+              setPopupOpen(true);
+              hasSubmittedRef.current = false;
+            }
+          }}
+        />
+
+        <form
+          className="contactForm"
+          action="https://formsubmit.co/contact@michaelcreation.fr"
+          method="POST"
+          target="hidden_iframe"
+          onSubmit={(e) => {
+            // On laisse l’envoi normal partir vers FormSubmit
+            setSending(true);
+            hasSubmittedRef.current = true;
+          }}
+        >
           {/* Options FormSubmit */}
           <input type="hidden" name="_captcha" value="false" />
           <input
@@ -721,6 +709,7 @@ function Contact() {
             name="_subject"
             value="Nouveau message - CloudStoragePro"
           />
+          <input type="hidden" name="_template" value="table" />
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <input
@@ -748,12 +737,6 @@ function Contact() {
             style={{ marginTop: 12 }}
           />
 
-          {err && (
-            <div style={{ marginTop: 10, color: "#b42318", fontWeight: 800 }}>
-              ❌ {err}
-            </div>
-          )}
-
           <button
             className="btn btn--primary btn--center"
             type="submit"
@@ -767,21 +750,18 @@ function Contact() {
 
       {/* POPUP MERCI */}
       {popupOpen && (
-        <div className="modalOverlay" role="dialog" aria-modal="true">
-          <div className="modalCard" style={{ maxWidth: 520 }}>
-            <button
-              className="modalClose"
-              onClick={() => setPopupOpen(false)}
-              aria-label="Fermer"
-            >
+        <div className="modalOverlay" role="dialog" aria-modal="true" onClick={() => setPopupOpen(false)}>
+          <div className="modalCard" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <button className="modalClose" onClick={() => setPopupOpen(false)} aria-label="Fermer">
               ✕
             </button>
 
+            <div className="successIcon">✓</div>
             <h3 className="authTitle" style={{ marginBottom: 8 }}>
-              ✅ Merci pour votre message
+              Merci pour votre message
             </h3>
             <p style={{ marginTop: 0, fontWeight: 800, color: "#203b6a" }}>
-              Nous avons bien reçu votre demande. Nous vous répondrons dès que possible.
+              Votre demande a bien été envoyée. Nous vous répondrons dès que possible.
             </p>
 
             <button
@@ -797,6 +777,7 @@ function Contact() {
     </section>
   );
 }
+
 
 
 
