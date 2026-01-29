@@ -669,7 +669,7 @@ function Contact() {
   const [sending, setSending] = useState(false);
 
   // Affiche la popup uniquement après une soumission (pas au chargement initial)
-  const hasSubmittedRef = useState(false)[0];
+  const hasSubmittedRef = useRef(false);
 
   return (
     <section id="contact" className="section">
