@@ -16,8 +16,7 @@ export default function App() {
             <a href="#home">Accueil</a>
             <a href="#features">Fonctionnalités</a>
             <a href="#pricing">Tarifs</a>
-            {/* lien vers vraie page contact */}
-            <a href="/contact.html">Contact</a>
+            <a href="#contact">Contact</a>
           </nav>
 
           <button className="btn-outline">Connexion</button>
@@ -32,67 +31,98 @@ export default function App() {
               Stockage Cloud Sécurisé <br /> Pour Vos Données
             </h1>
             <p>
-              Sauvegardez et accédez à vos fichiers partout, en toute sécurité.
+              Stockez et sauvegardez vos fichiers en toute sécurité sur notre
+              plateforme cloud.
             </p>
 
             <div className="hero-buttons">
-              <a href="#pricing" className="btn-primary">
-                Voir les abonnements
-              </a>
-              <button className="btn-outline">Connexion</button>
+              <button className="btn-primary">Commencer Maintenant</button>
+              <button className="btn-outline">En savoir plus</button>
             </div>
           </div>
 
-          <div className="hero-card">
-            <img src={logo} alt="logo" className="hero-logo" />
-            <h3>Cloud sécurisé</h3>
-            <p>Synchronisation & sauvegarde</p>
+          <div className="hero-illustration">
+            <img src="/cloud.png" alt="cloud illustration" />
           </div>
         </div>
       </section>
 
-      {/* ===== FEATURES ===== */}
-      <section id="features" className="section-soft">
-        <div className="container">
-          <h2 className="section-title">Pourquoi CloudStoragePro ?</h2>
+      {/* ===== SERVICES ===== */}
+      <section id="features" className="section">
+        <h2 className="section-title">Nos Services</h2>
 
-          <div className="features-grid">
-            <div className="card">🔒 Sécurité maximale</div>
-            <div className="card">☁️ Stockage cloud privé</div>
-            <div className="card">⚡ Accès rapide partout</div>
-            <div className="card">💾 Sauvegarde automatique</div>
+        <div className="services-grid">
+          <div className="service-card">
+            <img src="/icon-cloud.png" alt="" />
+            <h3>Stockage Évolutif</h3>
+            <p>Espace extensible selon vos besoins</p>
+          </div>
+
+          <div className="service-card">
+            <img src="/icon-lock.png" alt="" />
+            <h3>Sécurité Avancée</h3>
+            <p>Cryptage & protection de vos données</p>
+          </div>
+
+          <div className="service-card">
+            <img src="/icon-time.png" alt="" />
+            <h3>Accès 24/7</h3>
+            <p>Accédez à vos fichiers à tout moment</p>
           </div>
         </div>
       </section>
 
       {/* ===== PRICING ===== */}
-      <section id="pricing" className="section">
-        <div className="container">
-          <h2 className="section-title">Nos Abonnements</h2>
+      <section id="pricing" className="section-soft">
+        <h2 className="section-title">Choisissez Votre Abonnement</h2>
 
-          <div className="pricing-grid">
-            <div className="price-card">
-              <h3>Basic</h3>
-              <p className="price">4.99€<span>/mois</span></p>
-              <p>100 Go de stockage</p>
-              <button className="btn-primary">Choisir</button>
-            </div>
+        <div className="pricing-grid">
+          <div className="price-card">
+            <h3>Basique</h3>
+            <p className="price">€4,99 / mois</p>
+            <ul>
+              <li>✓ 100 Go de stockage</li>
+              <li>✓ Cryptage basique</li>
+              <li>✓ Support standard</li>
+            </ul>
+            <button className="btn-primary">S'inscrire</button>
+          </div>
 
-            <div className="price-card popular">
-              <h3>Pro</h3>
-              <p className="price">9.99€<span>/mois</span></p>
-              <p>1 To de stockage</p>
-              <button className="btn-primary">Choisir</button>
-            </div>
+          <div className="price-card popular">
+            <div className="badge">Le Plus Populaire</div>
+            <h3>Pro</h3>
+            <p className="price">€9,99 / mois</p>
+            <ul>
+              <li>✓ 1 To de stockage</li>
+              <li>✓ Sauvegarde automatique</li>
+              <li>✓ Sécurité renforcée</li>
+            </ul>
+            <button className="btn-gold">Essayer</button>
+          </div>
 
-            <div className="price-card">
-              <h3>Premium</h3>
-              <p className="price">19.99€<span>/mois</span></p>
-              <p>3 To de stockage</p>
-              <button className="btn-primary">Choisir</button>
-            </div>
+          <div className="price-card">
+            <h3>Premium</h3>
+            <p className="price">€19,99 / mois</p>
+            <ul>
+              <li>✓ 5 To de stockage</li>
+              <li>✓ Cryptage avancé</li>
+              <li>✓ Support prioritaire</li>
+            </ul>
+            <button className="btn-primary">S'inscrire</button>
           </div>
         </div>
+      </section>
+
+      {/* ===== CONTACT ===== */}
+      <section id="contact" className="section">
+        <h2 className="section-title">Contactez-Nous</h2>
+
+        <form className="contact-form" onSubmit={(e) => e.preventDefault()}>
+          <input type="text" placeholder="Nom" required />
+          <input type="email" placeholder="Email" required />
+          <textarea placeholder="Message" rows="5" required />
+          <button className="btn-primary">Envoyer</button>
+        </form>
       </section>
 
       {/* ===== FOOTER ===== */}
