@@ -16,8 +16,7 @@ export default function App() {
             <a href="#home">Accueil</a>
             <a href="#features">Fonctionnalités</a>
             <a href="#pricing">Tarifs</a>
-            {/* ✅ Contact = nouvelle page */}
-            <a href="/contact.html">Contact</a>
+            <a href="#contact">Contact</a>
           </nav>
 
           <button className="btn-outline">Connexion</button>
@@ -44,7 +43,7 @@ export default function App() {
           </div>
 
           <div className="hero-card">
-            <img src={logo} alt="logo" className="hero-logo" />
+            <img src={logo} className="hero-logo" />
             <h3>Cloud sécurisé</h3>
             <p>Synchronisation & sauvegarde</p>
           </div>
@@ -55,7 +54,6 @@ export default function App() {
       <section id="features" className="section-soft">
         <div className="container">
           <h2 className="section-title">Pourquoi CloudStoragePro ?</h2>
-
           <div className="features-grid">
             <div className="card">🔒 Sécurité maximale</div>
             <div className="card">☁️ Stockage cloud privé</div>
@@ -73,27 +71,21 @@ export default function App() {
           <div className="pricing-grid">
             <div className="price-card">
               <h3>Basic</h3>
-              <p className="price">
-                4.99€<span>/mois</span>
-              </p>
+              <p className="price">4.99€<span>/mois</span></p>
               <p>100 Go de stockage</p>
               <button className="btn-primary">Choisir</button>
             </div>
 
-            <div className="price-card popular">
+            <div className="price-card">
               <h3>Pro</h3>
-              <p className="price">
-                9.99€<span>/mois</span>
-              </p>
+              <p className="price">9.99€<span>/mois</span></p>
               <p>1 To de stockage</p>
               <button className="btn-primary">Choisir</button>
             </div>
 
             <div className="price-card">
               <h3>Premium</h3>
-              <p className="price">
-                19.99€<span>/mois</span>
-              </p>
+              <p className="price">19.99€<span>/mois</span></p>
               <p>3 To de stockage</p>
               <button className="btn-primary">Choisir</button>
             </div>
@@ -101,7 +93,29 @@ export default function App() {
         </div>
       </section>
 
-      {/* ✅ PLUS AUCUN FORMULAIRE ICI */}
+      {/* ===== CONTACT ===== */}
+      <section id="contact" className="contact-page">
+        <h2 className="section-title">Contactez-Nous</h2>
+
+        <form
+          className="contactForm"
+          action="https://formsubmit.co/contact@michaelcreation.fr"
+          method="POST"
+        >
+          <input type="hidden" name="_captcha" value="false" />
+          <input
+            type="hidden"
+            name="_next"
+            value="https://cloudstoragepro.vercel.app/merci.html"
+          />
+
+          <input name="name" placeholder="Nom" required />
+          <input name="email" type="email" placeholder="Email" required />
+          <textarea name="message" placeholder="Message" rows="5" required />
+
+          <button type="submit">Envoyer</button>
+        </form>
+      </section>
 
       {/* ===== FOOTER ===== */}
       <footer className="footer">
