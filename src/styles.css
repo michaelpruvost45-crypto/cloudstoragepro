@@ -355,3 +355,25 @@ a{color:inherit; text-decoration:none}
   .clientBox{grid-template-columns: 1fr}
   .clientRight{justify-content:flex-start}
 }
+.heroLogoWrap{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-bottom: 10px;
+}
+
+.heroLogo{
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 14px;
+  padding: 8px;
+  background: rgba(255,255,255,.16);
+  border: 1px solid rgba(255,255,255,.22);
+}
+
+.heroSubs{
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: .95;
+}
