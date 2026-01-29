@@ -663,7 +663,119 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
 /* =========================
    CONTACT / FOOTER
    ========================= */
+function Contact() {
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [sending, setSending] = useState(false);
 
+  // Affiche la popup uniquement après une soumission (pas au chargement initial)
+  const hasSubmittedRef = useRef(false);
+
+  return (
+    <section id="contact" className="section">
+      <div className="container">
+        <h2 className="section__title">Contactez-Nous</h2>
+
+        {/* Iframe caché : le formulaire se charge dedans, ta page ne bouge pas */}
+        <iframe
+          name="hidden_iframe"
+          title="hidden_iframe"
+          style={{ display: "none" }}
+          onLoad={() => {
+            // OnLoad se déclenche aussi au montage, donc on protège
+            if (hasSubmittedRef.current) {
+              setSending(false);
+              setPopupOpen(true);
+              hasSubmittedRef.current = false;
+            }
+          }}
+        />
+
+        <form
+          className="contactForm"
+          action="https://formsubmit.co/contact@michaelcreation.fr"
+          method="POST"
+          target="hidden_iframe"
+          onSubmit={(e) => {
+            // On laisse l’envoi normal partir vers FormSubmit
+            setSending(true);
+            hasSubmittedRef.current = true;
+          }}
+        >
+          {/* Options FormSubmit */}
+          <input type="hidden" name="_captcha" value="false" />
+          <input
+            type="hidden"
+            name="_subject"
+            value="Nouveau message - CloudStoragePro"
+          />
+          <input type="hidden" name="_template" value="table" />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <input
+              className="input"
+              type="text"
+              name="name"
+              placeholder="Nom"
+              required
+            />
+            <input
+              className="input"
+              type="email"
+              name="email"
+              placeholder="Adresse mail"
+              required
+            />
+          </div>
+
+          <textarea
+            className="textarea"
+            name="message"
+            placeholder="Votre message"
+            rows={7}
+            required
+            style={{ marginTop: 12 }}
+          />
+
+          <button
+            className="btn btn--primary btn--center"
+            type="submit"
+            disabled={sending}
+            style={{ marginTop: 14, opacity: sending ? 0.7 : 1 }}
+          >
+            {sending ? "Envoi..." : "Envoyer"}
+          </button>
+        </form>
+      </div>
+
+      {/* POPUP MERCI */}
+      {popupOpen && (
+        <div className="modalOverlay" role="dialog" aria-modal="true" onClick={() => setPopupOpen(false)}>
+          <div className="modalCard" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <button className="modalClose" onClick={() => setPopupOpen(false)} aria-label="Fermer">
+              ✕
+            </button>
+
+            <div className="successIcon">✓</div>
+            <h3 className="authTitle" style={{ marginBottom: 8 }}>
+              Merci pour votre message
+            </h3>
+            <p style={{ marginTop: 0, fontWeight: 800, color: "#203b6a" }}>
+              Votre demande a bien été envoyée. Nous vous répondrons dès que possible.
+            </p>
+
+            <button
+              className="btn btn--primary btn--full"
+              onClick={() => setPopupOpen(false)}
+              style={{ marginTop: 12 }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 
 
