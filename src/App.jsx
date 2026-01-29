@@ -665,12 +665,47 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
    ========================= */
 
 function Contact() {
-  const [sent, setSent] = useState(false);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState("");
 
-  function handleSubmit() {
-    // Affiche popup après envoi (le vrai envoi part dans l'iframe)
-    setSent(true);
-    setTimeout(() => setSent(false), 5000);
+  async function onSubmit(e) {
+    e.preventDefault();
+    setErr("");
+    setSending(true);
+
+    try {
+      const form = e.currentTarget;
+      const formData = new FormData(form);
+
+      // IMPORTANT : ton email FormSubmit
+      const endpoint = "https://formsubmit.co/ajax/contact@michaelcreation.fr";
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        body: formData,
+      });
+
+      // FormSubmit renvoie du JSON en /ajax
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        // Message plus clair
+        const msg =
+          (data && (data.message || data.error)) ||
+          "Impossible d’envoyer. Vérifie l’activation FormSubmit + Internet.";
+        throw new Error(msg);
+      }
+
+      // OK => popup + reset
+      form.reset();
+      setPopupOpen(true);
+    } catch (e2) {
+      console.error(e2);
+      setErr(e2?.message || "Erreur lors de l’envoi.");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -678,52 +713,91 @@ function Contact() {
       <div className="container">
         <h2 className="section__title">Contactez-Nous</h2>
 
-        {/* Iframe caché pour éviter la redirection */}
-        <iframe
-          name="hidden_iframe"
-          title="hidden_iframe"
-          style={{ display: "none" }}
-        />
-
-        <form
-          className="contactForm"
-          action="https://formsubmit.co/contact@michaelcreation.fr"
-          method="POST"
-          target="hidden_iframe"
-          onSubmit={handleSubmit}
-        >
+        <form className="contactForm" onSubmit={onSubmit}>
+          {/* Options FormSubmit */}
           <input type="hidden" name="_captcha" value="false" />
-          <input type="hidden" name="_subject" value="Nouveau message CloudStoragePro" />
+          <input
+            type="hidden"
+            name="_subject"
+            value="Nouveau message - CloudStoragePro"
+          />
 
-          {/* IMPORTANT: active l'email chez FormSubmit (sinon pas d'envoi) */}
-          <input type="hidden" name="_template" value="table" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <input
+              className="input"
+              type="text"
+              name="name"
+              placeholder="Nom"
+              required
+            />
+            <input
+              className="input"
+              type="email"
+              name="email"
+              placeholder="Adresse mail"
+              required
+            />
+          </div>
 
-          <input className="input" name="name" placeholder="Nom" required />
-          <input className="input" type="email" name="email" placeholder="Email" required />
-          <textarea className="textarea" name="message" placeholder="Message" rows={5} required />
+          <textarea
+            className="textarea"
+            name="message"
+            placeholder="Votre message"
+            rows={7}
+            required
+            style={{ marginTop: 12 }}
+          />
 
-          <button className="btn btn--primary btn--center" type="submit">
-            Envoyer
+          {err && (
+            <div style={{ marginTop: 10, color: "#b42318", fontWeight: 800 }}>
+              ❌ {err}
+            </div>
+          )}
+
+          <button
+            className="btn btn--primary btn--center"
+            type="submit"
+            disabled={sending}
+            style={{ marginTop: 14, opacity: sending ? 0.7 : 1 }}
+          >
+            {sending ? "Envoi..." : "Envoyer"}
           </button>
         </form>
       </div>
 
-      {sent && (
-        <div className="modalOverlay">
-          <div className="modalCard">
-            <div className="successIcon">✓</div>
-            <h3>Merci pour votre message !</h3>
-            <p>Votre demande a bien été envoyée.</p>
-            <button className="btn btn--primary" onClick={() => setSent(false)}>
-              Fermer
+      {/* POPUP MERCI */}
+      {popupOpen && (
+        <div className="modalOverlay" role="dialog" aria-modal="true">
+          <div className="modalCard" style={{ maxWidth: 520 }}>
+            <button
+              className="modalClose"
+              onClick={() => setPopupOpen(false)}
+              aria-label="Fermer"
+            >
+              ✕
             </button>
-            <div className="autoClose">Fermeture automatique dans 5 secondes…</div>
+
+            <h3 className="authTitle" style={{ marginBottom: 8 }}>
+              ✅ Merci pour votre message
+            </h3>
+            <p style={{ marginTop: 0, fontWeight: 800, color: "#203b6a" }}>
+              Nous avons bien reçu votre demande. Nous vous répondrons dès que possible.
+            </p>
+
+            <button
+              className="btn btn--primary btn--full"
+              onClick={() => setPopupOpen(false)}
+              style={{ marginTop: 12 }}
+            >
+              OK
+            </button>
           </div>
         </div>
       )}
     </section>
   );
 }
+
 
 
 
