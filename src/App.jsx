@@ -16,14 +16,34 @@ function safeName(first, last) {
   return `${f} ${l}`.trim()
 }
 
+// ✅ compteur local : combien de plans ont été choisis sur ce navigateur
+function getLocalSubscriptionsCount() {
+  try {
+    let count = 0
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith("csp_plan_")) {
+        const v = localStorage.getItem(k)
+        if (v) count++
+      }
+    }
+    return count
+  } catch {
+    return 0
+  }
+}
+
 export default function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState({ firstName: "", lastName: "" })
-  const [plan, setPlan] = useState(null) // abonnement choisi (stocké en localStorage)
+  const [plan, setPlan] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
 
+  // ✅ compteur “abonnements pris”
+  const [subsCount, setSubsCount] = useState(0)
+
   // Auth form
-  const [mode, setMode] = useState("login") // login | signup
+  const [mode, setMode] = useState("login")
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
@@ -36,6 +56,11 @@ export default function App() {
     const fromProfile = safeName(profile.firstName, profile.lastName)
     return fromProfile || "Client"
   }, [profile])
+
+  useEffect(() => {
+    // init compteur
+    setSubsCount(getLocalSubscriptionsCount())
+  }, [])
 
   // Load local plan per user
   useEffect(() => {
@@ -53,7 +78,7 @@ export default function App() {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  // Load profile names from localStorage (simple, sans DB)
+  // Load profile names from localStorage
   useEffect(() => {
     if (!userEmail) return
     const key = `csp_profile_${userEmail}`
@@ -78,6 +103,9 @@ export default function App() {
     const key = `csp_plan_${userEmail}`
     localStorage.setItem(key, planId)
     setPlan(planId)
+
+    // ✅ met à jour compteur après choix
+    setSubsCount(getLocalSubscriptionsCount())
   }
 
   function resetModalFields() {
@@ -120,7 +148,6 @@ export default function App() {
     setBusy(true)
     setMsg("")
 
-    // ✅ Nom & prénom obligatoires
     const fn = firstName.trim()
     const ln = lastName.trim()
     if (!fn || !ln) {
@@ -130,18 +157,12 @@ export default function App() {
     }
 
     try {
-      // On enregistre le profil en local immédiatement
-      // (et on le retrouve après connexion)
-      // Ça évite une DB pour l'instant.
-      // Supabase s'occupe de l'email confirmation.
-      const { data, error } = await supabase.auth.signUp({ email, password })
+      const { error } = await supabase.auth.signUp({ email, password })
       if (error) throw error
 
-      // sauve profil local par email (même avant confirmation)
       localStorage.setItem(`csp_profile_${email}`, JSON.stringify({ firstName: fn, lastName: ln }))
 
       setMsg("Compte créé ✅ Vérifiez votre email pour confirmer l’inscription.")
-      // On reste dans la modal pour permettre "Renvoyer email"
     } catch (err) {
       setMsg(err?.message || "Erreur lors de l’inscription.")
     } finally {
@@ -157,7 +178,6 @@ export default function App() {
     setBusy(true)
     setMsg("")
     try {
-      // IMPORTANT: configure l'URL de redirection dans Supabase Auth (voir plus bas)
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin
       })
@@ -178,10 +198,7 @@ export default function App() {
     setBusy(true)
     setMsg("")
     try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email
-      })
+      const { error } = await supabase.auth.resend({ type: "signup", email })
       if (error) throw error
       setMsg("Email de confirmation renvoyé ✅ Vérifiez votre boîte mail.")
     } catch (err) {
@@ -197,19 +214,16 @@ export default function App() {
 
   function onChoosePlan(planId) {
     if (!session) {
-      // si pas connecté => on ouvre connexion
       openLogin()
       return
     }
 
-    // si plan déjà choisi : on demande changement
     if (plan && plan !== planId) {
       savePlanLocal(planId)
       alert("Demande envoyée à l’équipe technique ✅\nLe changement sera effectué sous 48h si place disponible.")
       return
     }
 
-    // si aucun plan : choisir
     if (!plan) {
       savePlanLocal(planId)
       alert("Demande envoyée à l’équipe technique ✅\nActivation sous 48h si place disponible.")
@@ -224,7 +238,6 @@ export default function App() {
 
   return (
     <>
-      {/* NAV */}
       <div className="nav">
         <div className="navInner">
           <div className="brand">
@@ -250,7 +263,6 @@ export default function App() {
       </div>
 
       <div className="container" id="accueil">
-        {/* HERO */}
         <div className="hero">
           <div>
             <h1>Stockage Cloud Sécurisé<br />Pour Vos Données</h1>
@@ -272,15 +284,23 @@ export default function App() {
             </div>
           </div>
 
+          {/* ✅ ICI : même carte, mais logo + compteur */}
           <div className="heroCard" aria-hidden="true">
             <div>
+              <div className="heroLogoWrap">
+                <img className="heroLogo" src="/logo.png" alt="CloudStoragePro" />
+              </div>
+
               <b>Cloud sécurisé</b>
               <span>Synchronisation & sauvegarde</span>
+
+              <div className="heroSubs">
+                Abonnements pris : <strong>{subsCount}</strong>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ✅ ESPACE CLIENT (UNIQUEMENT SI CONNECTÉ) */}
         {session && (
           <div className="clientBox" style={{ marginTop: 18 }}>
             <div className="clientLeft">
@@ -313,7 +333,6 @@ export default function App() {
           </div>
         )}
 
-        {/* SERVICES */}
         <div id="fonctionnalites">
           <div className="sectionTitle">Nos Services</div>
           <div className="services">
@@ -335,7 +354,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* PRICING */}
         <div id="tarifs">
           <div className="sectionTitle">Choisissez Votre Abonnement</div>
           <div className="pricing">
@@ -351,7 +369,6 @@ export default function App() {
                   {p.features.map((f) => <li key={f}>✓ {f}</li>)}
                 </ul>
 
-                {/* ✅ logique : si connecté + plan déjà choisi => bouton change / sinon choisir */}
                 <div style={{ marginTop: 14 }}>
                   <button
                     className="btn btnPrimary"
@@ -376,7 +393,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* CONTACT */}
         <div id="contact">
           <div className="sectionTitle">Contactez-Nous</div>
           <div style={{
@@ -400,7 +416,6 @@ export default function App() {
         <div className="footer">© 2026 {BRAND.name} — Tous droits réservés</div>
       </div>
 
-      {/* MODAL AUTH */}
       {modalOpen && (
         <div className="overlay" onMouseDown={() => setModalOpen(false)}>
           <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
@@ -439,7 +454,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* ✅ Sous “mot de passe oublié” => renvoyer email */}
                   <div className="smallRow">
                     <button className="smallLink" type="button" onClick={handleForgotPassword}>
                       Mot de passe oublié
