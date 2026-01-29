@@ -1,4 +1,7 @@
 import "./styles.css";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "./supabaseClient";
+
 import logo from "/logo.png";
 
 export default function App() {
