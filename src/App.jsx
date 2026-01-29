@@ -16,7 +16,7 @@ export default function App() {
             <a href="#home">Accueil</a>
             <a href="#features">Fonctionnalités</a>
             <a href="#pricing">Tarifs</a>
-            {/* contact ouvre une autre page */}
+            {/* ✅ Contact = nouvelle page */}
             <a href="/contact.html">Contact</a>
           </nav>
 
@@ -73,27 +73,35 @@ export default function App() {
           <div className="pricing-grid">
             <div className="price-card">
               <h3>Basic</h3>
-              <p className="price">4.99€<span>/mois</span></p>
+              <p className="price">
+                4.99€<span>/mois</span>
+              </p>
               <p>100 Go de stockage</p>
               <button className="btn-primary">Choisir</button>
             </div>
 
             <div className="price-card popular">
               <h3>Pro</h3>
-              <p className="price">9.99€<span>/mois</span></p>
+              <p className="price">
+                9.99€<span>/mois</span>
+              </p>
               <p>1 To de stockage</p>
               <button className="btn-primary">Choisir</button>
             </div>
 
             <div className="price-card">
               <h3>Premium</h3>
-              <p className="price">19.99€<span>/mois</span></p>
+              <p className="price">
+                19.99€<span>/mois</span>
+              </p>
               <p>3 To de stockage</p>
               <button className="btn-primary">Choisir</button>
             </div>
           </div>
         </div>
       </section>
+
+      {/* ✅ PLUS AUCUN FORMULAIRE ICI */}
 
       {/* ===== FOOTER ===== */}
       <footer className="footer">
