@@ -5,21 +5,26 @@ export default function App() {
   const [openAuth, setOpenAuth] = useState(false);
   const [session, setSession] = useState(null);
 
-  // Profil (table profiles)
+  // Profil Supabase
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+
+  // UI espace client
+  const [openEditProfile, setOpenEditProfile] = useState(false);
+
+  // Autoriser changement plan uniquement via bouton "Changer mon abonnement"
+  const [allowPlanChange, setAllowPlanChange] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession || null);
     });
 
     return () => sub?.subscription?.unsubscribe?.();
   }, []);
 
-  // Charger / créer le profil dès qu'on est connecté
   useEffect(() => {
     if (!session?.user?.id) {
       setProfile(null);
@@ -32,7 +37,6 @@ export default function App() {
   async function loadOrCreateProfile(user) {
     setProfileLoading(true);
     try {
-      // 1) Essayer de lire le profil
       const { data: existing, error: readErr } = await supabase
         .from("profiles")
         .select("*")
@@ -46,7 +50,6 @@ export default function App() {
         return;
       }
 
-      // 2) Sinon créer le profil à partir des metadata
       const first_name = user.user_metadata?.first_name || "";
       const last_name = user.user_metadata?.last_name || "";
 
@@ -56,7 +59,9 @@ export default function App() {
           id: user.id,
           first_name,
           last_name,
-          plan: null
+          plan: null,
+          pending_plan: null,
+          change_requested_at: null
         })
         .select("*")
         .single();
@@ -65,34 +70,114 @@ export default function App() {
       setProfile(created);
     } catch (e) {
       console.error(e);
-      // En cas d’erreur, on laisse le site fonctionner mais sans profil
       setProfile(null);
     } finally {
       setProfileLoading(false);
     }
   }
 
-  async function savePlan(planName) {
+  async function logout() {
+    await supabase.auth.signOut();
+    setProfile(null);
+    setAllowPlanChange(false);
+  }
+
+  // ✅ Enregistrer plan
+  // - Si aucun plan actif => on active directement
+  // - Si plan actif => on enregistre une DEMANDE (pending_plan) et on bloque la page tarifs
+  async function handlePlanClick(planName) {
     if (!session?.user?.id) return;
+
+    const hasActivePlan = !!profile?.plan;
+    const hasPending = !!profile?.pending_plan;
+
+    // Si déjà plan actif et pas en mode "changement autorisé"
+    if (hasActivePlan && !allowPlanChange) return;
+
+    // Si demande en attente, on bloque tout
+    if (hasPending) return;
+
     try {
+      // 1) Première souscription => plan direct
+      if (!hasActivePlan) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .update({
+            plan: planName,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", session.user.id)
+          .select("*")
+          .single();
+
+        if (error) throw error;
+        setProfile(data);
+        setAllowPlanChange(false);
+        alert(`✅ Abonnement activé : ${planName}`);
+        return;
+      }
+
+      // 2) Changement => demande en attente (48h)
       const { data, error } = await supabase
         .from("profiles")
-        .update({ plan: planName, updated_at: new Date().toISOString() })
+        .update({
+          pending_plan: planName,
+          change_requested_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
         .eq("id", session.user.id)
         .select("*")
         .single();
 
       if (error) throw error;
       setProfile(data);
+      setAllowPlanChange(false);
+
+      alert(
+        "✅ Demande envoyée à l’équipe technique.\nLe changement sera effectué sous 48h si place disponible."
+      );
     } catch (e) {
       console.error(e);
-      alert("❌ Impossible d’enregistrer l’abonnement (vérifie la table profiles + policies).");
+      alert("❌ Impossible d’enregistrer (vérifie la table profiles + policies).");
     }
   }
 
-  async function logout() {
-    await supabase.auth.signOut();
-    setProfile(null);
+  // ✅ Modifier profil (table + metadata)
+  async function saveProfileNames(first_name, last_name) {
+    if (!session?.user?.id) return;
+
+    try {
+      // 1) Update table profiles
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({
+          first_name,
+          last_name,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", session.user.id)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
+
+      // 2) Update metadata (utile si tu veux garder ça côté auth)
+      const { error: metaErr } = await supabase.auth.updateUser({
+        data: { first_name, last_name }
+      });
+
+      if (metaErr) {
+        // non bloquant
+        console.warn("metadata update warning:", metaErr.message);
+      }
+
+      setOpenEditProfile(false);
+      alert("✅ Profil mis à jour !");
+    } catch (e) {
+      console.error(e);
+      alert("❌ Impossible de modifier le profil.");
+    }
   }
 
   const isLoggedIn = !!session;
@@ -103,6 +188,7 @@ export default function App() {
   const fullName = `${firstName} ${lastName}`.trim();
 
   const currentPlan = profile?.plan || null;
+  const pendingPlan = profile?.pending_plan || null;
 
   return (
     <div>
@@ -120,9 +206,19 @@ export default function App() {
         <ClientArea
           fullName={fullName}
           email={userEmail}
-          plan={currentPlan}
+          currentPlan={currentPlan}
+          pendingPlan={pendingPlan}
           loading={profileLoading}
-          onManagePlan={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })}
+          onEditProfile={() => setOpenEditProfile(true)}
+          onChooseFirstPlan={() => {
+            setAllowPlanChange(true); // autorise sélection si pas de plan aussi
+            document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
+          }}
+          onRequestChange={() => {
+            // Autorise le changement UNIQUEMENT via ce bouton
+            setAllowPlanChange(true);
+            document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
+          }}
         />
       ) : (
         <TeaserClientArea onOpenAuth={() => setOpenAuth(true)} />
@@ -132,9 +228,11 @@ export default function App() {
 
       <Pricing
         isLoggedIn={isLoggedIn}
-        onOpenAuth={() => setOpenAuth(true)}
-        onPlanChosen={savePlan}
         currentPlan={currentPlan}
+        pendingPlan={pendingPlan}
+        allowPlanChange={allowPlanChange}
+        onOpenAuth={() => setOpenAuth(true)}
+        onPlanClick={handlePlanClick}
       />
 
       <Contact />
@@ -144,10 +242,23 @@ export default function App() {
         <AuthModal onClose={() => setOpenAuth(false)} onLoggedIn={() => setOpenAuth(false)} />
       )}
 
+      {openEditProfile && (
+        <EditProfileModal
+          onClose={() => setOpenEditProfile(false)}
+          initialFirstName={firstName}
+          initialLastName={lastName}
+          onSave={saveProfileNames}
+        />
+      )}
+
       <style>{css}</style>
     </div>
   );
 }
+
+/* =========================
+   HEADER / HERO
+   ========================= */
 
 function Header({ isLoggedIn, userEmail, fullName, onOpenAuth, onLogout }) {
   return (
@@ -255,7 +366,19 @@ function TeaserClientArea({ onOpenAuth }) {
   );
 }
 
-function ClientArea({ fullName, email, plan, loading, onManagePlan }) {
+function ClientArea({
+  fullName,
+  email,
+  currentPlan,
+  pendingPlan,
+  loading,
+  onEditProfile,
+  onChooseFirstPlan,
+  onRequestChange
+}) {
+  const hasPlan = !!currentPlan;
+  const hasPending = !!pendingPlan;
+
   return (
     <section className="section section--soft">
       <div className="container">
@@ -272,7 +395,7 @@ function ClientArea({ fullName, email, plan, loading, onManagePlan }) {
               <div className="infoItem">
                 <div className="infoLabel">Abonnement</div>
                 <div className="infoValue">
-                  {loading ? "Chargement..." : plan || "Aucun choisi"}
+                  {loading ? "Chargement..." : currentPlan || "Aucun"}
                 </div>
               </div>
 
@@ -281,12 +404,33 @@ function ClientArea({ fullName, email, plan, loading, onManagePlan }) {
                 <div className="infoValue">Connecté ✅</div>
               </div>
             </div>
+
+            {hasPending && (
+              <div className="pendingBox">
+                ✅ Demande de changement envoyée : <strong>{pendingPlan}</strong>
+                <br />
+                <span className="pendingSmall">
+                  Le changement sera effectué sous 48h si place disponible.
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="clientActions">
-            <button className="btn btn--primary" onClick={onManagePlan}>
-              Mon abonnement
+            <button className="btn btn--light" onClick={onEditProfile}>
+              Modifier mon profil
             </button>
+
+            {!hasPlan ? (
+              <button className="btn btn--primary" onClick={onChooseFirstPlan}>
+                Choisir mon abonnement
+              </button>
+            ) : (
+              <button className="btn btn--primary" onClick={onRequestChange} disabled={hasPending}>
+                {hasPending ? "Changement en attente" : "Changer mon abonnement"}
+              </button>
+            )}
+
             <button
               className="btn btn--light"
               onClick={() => alert("📁 Mes fichiers : on l’ajoutera quand tu connecteras MinIO/Synology.")}
@@ -297,6 +441,75 @@ function ClientArea({ fullName, email, plan, loading, onManagePlan }) {
         </div>
       </div>
     </section>
+  );
+}
+
+/* =========================
+   MODAL MODIFIER PROFIL
+   ========================= */
+
+function EditProfileModal({ onClose, initialFirstName, initialLastName, onSave }) {
+  const [firstName, setFirstName] = useState(initialFirstName || "");
+  const [lastName, setLastName] = useState(initialLastName || "");
+  const [saving, setSaving] = useState(false);
+
+  const firstOk = firstName.trim().length > 0;
+  const lastOk = lastName.trim().length > 0;
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!firstOk || !lastOk) return;
+
+    setSaving(true);
+    try {
+      await onSave(firstName.trim(), lastName.trim());
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modalOverlay" role="dialog" aria-modal="true">
+      <div className="modalCard">
+        <button className="modalClose" onClick={onClose} aria-label="Fermer">
+          ✕
+        </button>
+
+        <h3 className="authTitle">Modifier mon profil</h3>
+
+        <form onSubmit={submit}>
+          <label className="authLabel">
+            Prénom <span className="req">*</span>
+            <input
+              className="authInput"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="ex: Alex"
+            />
+            {!firstOk && <div className="fieldError">Prénom obligatoire</div>}
+          </label>
+
+          <label className="authLabel">
+            Nom <span className="req">*</span>
+            <input
+              className="authInput"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="ex: Dupont"
+            />
+            {!lastOk && <div className="fieldError">Nom obligatoire</div>}
+          </label>
+
+          <button className="btn btn--primary btn--full" type="submit" disabled={!firstOk || !lastOk || saving}>
+            {saving ? "Enregistrement..." : "Enregistrer"}
+          </button>
+
+          <button className="btn btn--light btn--full" type="button" onClick={onClose} style={{ marginTop: 10 }}>
+            Annuler
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -329,7 +542,7 @@ function Services() {
   );
 }
 
-function Pricing({ onOpenAuth, isLoggedIn, onPlanChosen, currentPlan }) {
+function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanChange, onPlanClick }) {
   const plans = useMemo(
     () => [
       {
@@ -358,13 +571,26 @@ function Pricing({ onOpenAuth, isLoggedIn, onPlanChosen, currentPlan }) {
     []
   );
 
-  async function handleChoose(planName) {
-    if (!isLoggedIn) {
-      onOpenAuth();
-      return;
+  const hasPlan = !!currentPlan;
+  const hasPending = !!pendingPlan;
+
+  function getActionState(planName) {
+    if (!isLoggedIn) return { label: "CONNEXION", disabled: false, onClick: onOpenAuth };
+
+    // Si une demande est en attente => tout bloqué
+    if (hasPending) return { label: "BLOQUÉ", disabled: true, onClick: null };
+
+    // Si plan actif et pas autorisé => pas de changement possible depuis ici
+    if (hasPlan && !allowPlanChange) return { label: "INDISPONIBLE", disabled: true, onClick: null };
+
+    // Si plan actif et autorisé => on peut demander un changement (mais pas vers le même)
+    if (hasPlan && allowPlanChange) {
+      if (planName === currentPlan) return { label: "DÉJÀ ACTIF", disabled: true, onClick: null };
+      return { label: "DEMANDER CE CHANGEMENT", disabled: false, onClick: () => onPlanClick(planName) };
     }
-    await onPlanChosen?.(planName);
-    alert(`✅ Abonnement enregistré : ${planName}`);
+
+    // Si pas de plan => choisir direct
+    return { label: "CHOISIR", disabled: false, onClick: () => onPlanClick(planName) };
   }
 
   return (
@@ -372,9 +598,22 @@ function Pricing({ onOpenAuth, isLoggedIn, onPlanChosen, currentPlan }) {
       <div className="container">
         <h2 className="section__title">Choisissez Votre Abonnement</h2>
 
+        {isLoggedIn && hasPlan && !allowPlanChange && !hasPending && (
+          <div className="lockedMsg">
+            🔒 Tu as déjà un abonnement actif. Pour demander un changement, clique sur{" "}
+            <strong>“Changer mon abonnement”</strong> dans l’espace client.
+          </div>
+        )}
+
+        {isLoggedIn && hasPending && (
+          <div className="lockedMsg">
+            ✅ Demande en cours : <strong>{pendingPlan}</strong> — changement sous 48h si place disponible.
+          </div>
+        )}
+
         <div className="pricingGrid">
           {plans.map((p) => {
-            const isCurrent = currentPlan === p.name;
+            const a = getActionState(p.name);
             return (
               <div key={p.name} className={`priceCard ${p.highlight ? "priceCard--pro" : ""}`}>
                 {p.badge && <div className="priceCard__badge">{p.badge}</div>}
@@ -395,12 +634,12 @@ function Pricing({ onOpenAuth, isLoggedIn, onPlanChosen, currentPlan }) {
 
                 <button
                   className={`btn ${p.highlight ? "btn--gold" : "btn--primary"} btn--full`}
-                  onClick={() => handleChoose(p.name)}
+                  onClick={a.onClick || undefined}
+                  disabled={a.disabled}
+                  style={a.disabled ? { opacity: 0.65, cursor: "not-allowed" } : undefined}
                 >
-                  {!isLoggedIn ? "CONNEXION" : isCurrent ? "DÉJÀ ACTIF" : "CHOISIR"}
+                  {a.label}
                 </button>
-
-                {isLoggedIn && isCurrent && <div className="activePlan">✅ Abonnement actif</div>}
               </div>
             );
           })}
@@ -408,7 +647,13 @@ function Pricing({ onOpenAuth, isLoggedIn, onPlanChosen, currentPlan }) {
 
         <div className="note">
           <strong>Note :</strong>{" "}
-          {isLoggedIn ? "Ton choix est enregistré dans ton espace client." : "Connecte-toi pour choisir une offre."}
+          {!isLoggedIn
+            ? "Connecte-toi pour choisir une offre."
+            : hasPending
+            ? "Changement en attente (48h si place disponible)."
+            : hasPlan
+            ? "Gestion du changement uniquement via l’espace client."
+            : "Tu peux choisir ton premier abonnement ici."}
         </div>
       </div>
     </section>
@@ -449,7 +694,9 @@ function Footer() {
 }
 
 /* =========================
-   AUTH MODAL
+   AUTH MODAL (login/signup/forgot)
+   NOTE: tu gardes ton AuthForm existant,
+         ici je laisse le modal "vide" car tu l’avais déjà.
    ========================= */
 
 function AuthModal({ onClose, onLoggedIn }) {
@@ -459,6 +706,7 @@ function AuthModal({ onClose, onLoggedIn }) {
         <button className="modalClose" onClick={onClose} aria-label="Fermer">
           ✕
         </button>
+
         <AuthForm onLoggedIn={onLoggedIn} />
       </div>
     </div>
@@ -471,12 +719,12 @@ function AuthForm({ onLoggedIn }) {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const firstNameOk = firstName.trim().length > 0;
-  const lastNameOk = lastName.trim().length > 0;
+  const firstOk = firstName.trim().length > 0;
+  const lastOk = lastName.trim().length > 0;
+  const signupDisabled = mode === "signup" && (!firstOk || !lastOk);
 
   async function submit(e) {
     e.preventDefault();
@@ -490,7 +738,6 @@ function AuthForm({ onLoggedIn }) {
         const redirectTo = window.location.origin;
         const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
         if (error) throw error;
-
         setMsg("✅ Email envoyé. Clique sur le lien dans ton mail pour changer ton mot de passe.");
         return;
       }
@@ -498,20 +745,16 @@ function AuthForm({ onLoggedIn }) {
       if (!password) throw new Error("Ajoute un mot de passe.");
 
       if (mode === "signup") {
-        if (!firstNameOk) throw new Error("Prénom obligatoire.");
-        if (!lastNameOk) throw new Error("Nom obligatoire.");
+        if (!firstOk) throw new Error("Prénom obligatoire.");
+        if (!lastOk) throw new Error("Nom obligatoire.");
 
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: {
-              first_name: firstName.trim(),
-              last_name: lastName.trim()
-            }
+            data: { first_name: firstName.trim(), last_name: lastName.trim() }
           }
         });
-
         if (error) throw error;
 
         setMsg("✅ Compte créé. Un email de confirmation a été envoyé. Vérifie ta boîte mail !");
@@ -540,7 +783,6 @@ function AuthForm({ onLoggedIn }) {
   async function resendConfirmation() {
     setMsg("");
     setLoading(true);
-
     try {
       if (!email) throw new Error("Entre ton email d’abord.");
       const redirectTo = window.location.origin;
@@ -552,7 +794,6 @@ function AuthForm({ onLoggedIn }) {
       });
 
       if (error) throw error;
-
       setMsg("✅ Email de confirmation renvoyé ! Vérifie tes spams si besoin.");
     } catch (err) {
       setMsg("❌ " + (err?.message || "Impossible de renvoyer l’email"));
@@ -560,8 +801,6 @@ function AuthForm({ onLoggedIn }) {
       setLoading(false);
     }
   }
-
-  const signupDisabled = mode === "signup" && (!firstNameOk || !lastNameOk);
 
   return (
     <div>
@@ -588,7 +827,7 @@ function AuthForm({ onLoggedIn }) {
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="ex: Alex"
               />
-              {!firstNameOk && <div className="fieldError">Prénom obligatoire</div>}
+              {!firstOk && <div className="fieldError">Prénom obligatoire</div>}
             </label>
 
             <label className="authLabel">
@@ -599,7 +838,7 @@ function AuthForm({ onLoggedIn }) {
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="ex: Dupont"
               />
-              {!lastNameOk && <div className="fieldError">Nom obligatoire</div>}
+              {!lastOk && <div className="fieldError">Nom obligatoire</div>}
             </label>
           </div>
         )}
@@ -632,7 +871,6 @@ function AuthForm({ onLoggedIn }) {
           className="btn btn--primary btn--full"
           type="submit"
           disabled={loading || signupDisabled}
-          title={signupDisabled ? "Prénom et Nom obligatoires" : ""}
         >
           {loading
             ? "Patiente..."
@@ -646,14 +884,7 @@ function AuthForm({ onLoggedIn }) {
 
       {mode === "login" && (
         <>
-          <button
-            className="authSwitch"
-            type="button"
-            onClick={() => {
-              setMsg("");
-              setMode("forgot");
-            }}
-          >
+          <button className="authSwitch" type="button" onClick={() => setMode("forgot")}>
             Mot de passe oublié ?
           </button>
 
@@ -661,59 +892,70 @@ function AuthForm({ onLoggedIn }) {
             Renvoyer l’email de confirmation
           </button>
 
-          <button
-            className="authSwitch"
-            type="button"
-            onClick={() => {
-              setMsg("");
-              setMode("signup");
-            }}
-          >
+          <button className="authSwitch" type="button" onClick={() => setMode("signup")}>
             Créer un compte
           </button>
         </>
       )}
 
       {mode === "signup" && (
-        <button
-          className="authSwitch"
-          type="button"
-          onClick={() => {
-            setMsg("");
-            setMode("login");
-          }}
-        >
+        <button className="authSwitch" type="button" onClick={() => setMode("login")}>
           J’ai déjà un compte
         </button>
       )}
 
       {mode === "forgot" && (
-        <button
-          className="authSwitch"
-          type="button"
-          onClick={() => {
-            setMsg("");
-            setMode("login");
-          }}
-        >
+        <button className="authSwitch" type="button" onClick={() => setMode("login")}>
           Retour à la connexion
         </button>
       )}
 
       {msg && <div className="authMsg">{msg}</div>}
-
-      <div className="authHint">
-        Important : Supabase → Authentication → URL Configuration : mets ton URL Vercel dans Site URL + Redirect URLs.
-      </div>
     </div>
   );
 }
 
 /* =========================
-   CSS (inchangé globalement)
+   CSS léger (pour les nouveaux blocs)
    ========================= */
-const css = `/* garde ton CSS actuel ici si tu en as déjà un, sinon tu peux laisser vide */
-.activePlan{margin-top:10px;font-weight:900;opacity:.9}
+
+const css = `
 .req{color:#ffd36a;font-weight:1000;margin-left:4px}
 .fieldError{margin-top:6px;font-size:12px;color:#ffd36a;font-weight:900}
+
+.pendingBox{
+  margin-top:12px;
+  padding:12px;
+  border-radius:14px;
+  background:#fff6da;
+  border:1px solid #ffe2a3;
+  color:#5a3b00;
+  font-weight:900;
+}
+.pendingSmall{font-size:12px;opacity:.85;font-weight:800}
+
+.lockedMsg{
+  background:#ffffff;
+  border:1px solid #e8eefb;
+  border-radius:14px;
+  padding:12px;
+  margin:0 0 14px;
+  box-shadow:0 10px 30px rgba(16,38,77,.06);
+  color:#203b6a;
+  font-weight:900;
+}
+
+.activePlan{margin-top:10px;font-weight:900;opacity:.9}
+
+/* Mini styles basiques si jamais ton CSS principal est ailleurs */
+.container{max-width:1100px;margin:0 auto;padding:0 16px}
+.section{padding:56px 0}
+.section--soft{background:#f6f9ff}
+.section__title{text-align:center;margin:0 0 22px;color:#10264d}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.pricingGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+
+@media(max-width:900px){
+  .grid3,.pricingGrid{grid-template-columns:1fr}
+}
 `;
