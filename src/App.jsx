@@ -1,165 +1,162 @@
-import { useEffect, useState } from 'react'
-import { supabase } from './supabaseClient'
-import logo from '/public/logo.png'
+import { useEffect, useState } from "react"
+import { supabase } from "./supabaseClient"
+import AdminRequests from "./AdminRequests"
+
+const ADMIN_EMAIL = "admin@cloudstoragepro.fr"
 
 export default function App() {
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [plan, setPlan] = useState("Aucun choisi")
 
-  const [user,setUser] = useState(null)
-  const [email,setEmail] = useState('')
-  const [password,setPassword] = useState('')
-  const [subscription,setSubscription] = useState(null)
-  const [requests,setRequests] = useState([])
-
-  // Vérifie connexion
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null)
-      if(data.session?.user) loadSubscription(data.session.user.id)
+      setLoading(false)
     })
 
-    supabase.auth.onAuthStateChange((_event, session)=>{
+    supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
-      if(session?.user) loadSubscription(session.user.id)
     })
   }, [])
 
-  async function loadSubscription(uid){
-    const { data } = await supabase
-      .from('subscription_requests')
-      .select()
-      .eq('user_id',uid)
-      .order('created_at',{ascending:false})
-      .limit(1)
-
-    if(data.length>0) setSubscription(data[0].plan)
+  async function signIn(email, password) {
+    await supabase.auth.signInWithPassword({ email, password })
   }
 
-  async function signIn(){
-    await supabase.auth.signInWithPassword({ email,password })
+  async function signUp(email, password) {
+    await supabase.auth.signUp({ email, password })
   }
 
-  async function signUp(){
-    await supabase.auth.signUp({
-      email,
-      password,
-      options:{ emailRedirectTo: window.location.origin }
-    })
-  }
-
-  async function signOut(){
+  async function signOut() {
     await supabase.auth.signOut()
   }
 
-  async function requestPlan(plan){
-    await supabase.from('subscription_requests').insert({
-      user_id:user.id,
-      email:user.email,
-      plan
+  async function requestPlan(newPlan) {
+    if (!user) return
+
+    await supabase.from("demandes_abonnement").insert({
+      user_id: user.id,
+      email: user.email,
+      plan: newPlan
     })
-    setSubscription(plan)
-    alert("Demande envoyée à l’équipe technique. Traitement sous 48h.")
+
+    alert("✅ Demande envoyée à l’équipe technique.\nTraitement sous 48h si disponible.")
   }
 
-  // Admin : charge toutes demandes
-  async function loadAllRequests(){
-    const { data } = await supabase
-      .from('subscription_requests')
-      .select()
-      .order('created_at',{ascending:false})
-    setRequests(data)
+  if (loading) return <div>Chargement...</div>
+
+  // ---------- SI PAS CONNECTÉ ----------
+  if (!user) {
+    return (
+      <div className="login-page">
+        <img src="/logo.png" className="logo" />
+
+        <h1>CloudStoragePro</h1>
+
+        <AuthForm onLogin={signIn} onRegister={signUp} />
+      </div>
+    )
   }
 
-  useEffect(()=>{
-    if(user?.email === "admin@cloudstoragepro.fr"){
-      loadAllRequests()
-    }
-  },[user])
+  const isAdmin = user.email === ADMIN_EMAIL
 
+  // ---------- SI ADMIN ----------
+  if (isAdmin) {
+    return (
+      <div className="container">
+        <header>
+          <img src="/logo.png" className="logo-small" />
+          <button onClick={signOut}>Déconnexion</button>
+        </header>
+
+        <AdminRequests />
+      </div>
+    )
+  }
+
+  // ---------- SI UTILISATEUR ----------
   return (
-    <>
-    <header>
-      <img src={logo}/>
-      <nav>
-        <a>Accueil</a>
-        <a>Fonctionnalités</a>
-        <a>Tarifs</a>
-        <a>Contact</a>
-      </nav>
-      {user ?
-        <button className="btn" onClick={signOut}>Déconnexion</button>
-        :
-        <></>
-      }
-    </header>
+    <div className="container">
 
-    <section className="hero">
-      <div className="hero-text">
-        <h1>Stockage Cloud Sécurisé</h1>
-        <p>Stockez et sauvegardez vos fichiers en toute sécurité.</p>
-        {!user &&
-          <>
-            <input placeholder="Email" onChange={e=>setEmail(e.target.value)} />
-            <input type="password" placeholder="Mot de passe" onChange={e=>setPassword(e.target.value)} />
-            <br/>
-            <button className="btn" onClick={signIn}>Connexion</button>
-            <button className="btn" onClick={signUp}>Créer un compte</button>
-          </>
-        }
-      </div>
+      <header>
+        <img src="/logo.png" className="logo-small" />
+        <div className="user-info">
+          {user.email}
+          <button onClick={signOut}>Déconnexion</button>
+        </div>
+      </header>
 
-      <div className="cloud-card">
-        <img src={logo}/>
-        <h3>Cloud sécurisé</h3>
-        <p>Synchronisation & sauvegarde</p>
-      </div>
-    </section>
+      <section className="hero">
+        <div className="hero-text">
+          <h1>Stockage Cloud Sécurisé</h1>
+          <p>Synchronisation & sauvegarde</p>
+        </div>
 
-    {user &&
-      <section className="section">
-        <div className="client-box">
-          <h2>Espace client</h2>
-          <p>Bienvenue {user.email}</p>
-
-          <div className="status">Connecté ✔</div>
-
-          <p>Abonnement : {subscription ?? "Aucun choisi"}</p>
-
-          {!subscription &&
-            <>
-              <div className="offer">
-                <b>Basique - 4.99€/mois</b>
-                <button onClick={()=>requestPlan("Basique")}>Choisir</button>
-              </div>
-              <div className="offer">
-                <b>Pro - 9.99€/mois</b>
-                <button onClick={()=>requestPlan("Pro")}>Choisir</button>
-              </div>
-              <div className="offer">
-                <b>Premium - 19.99€/mois</b>
-                <button onClick={()=>requestPlan("Premium")}>Choisir</button>
-              </div>
-            </>
-          }
-
-          {subscription &&
-            <div className="offer">
-              Offre actuelle : <b>{subscription}</b><br/>
-              <button onClick={()=>setSubscription(null)}>Changer mon abonnement</button>
-            </div>
-          }
-
-          {user.email === "admin@cloudstoragepro.fr" &&
-            <div className="admin">
-              <h3>Panneau Admin</h3>
-              {requests.map(r=>(
-                <p key={r.id}>{r.email} → {r.plan}</p>
-              ))}
-            </div>
-          }
-
+        <div className="hero-card">
+          <img src="/logo.png" className="hero-logo" />
+          <p>CloudStoragePro</p>
+          <small>Nombre d’abonnés actifs : </small>
+          <b>— connecté —</b>
         </div>
       </section>
-    }
-    </>
+
+      <section className="client-box">
+        <h2>Espace client</h2>
+
+        <p><b>Bienvenue</b> {user.email}</p>
+
+        <div className="status-row">
+          <div className="status-card">
+            <small>Abonnement</small>
+            <b>{plan}</b>
+          </div>
+          <div className="status-card">
+            <small>Statut</small>
+            <b>Connecté ✅</b>
+          </div>
+        </div>
+
+        <div className="buttons">
+          <button onClick={() => requestPlan("Basique")}>Basique – 4.99€</button>
+          <button onClick={() => requestPlan("Pro")}>Pro – 9.99€</button>
+          <button onClick={() => requestPlan("Premium")}>Premium – 19.99€</button>
+        </div>
+
+        <p className="info">
+          Après demande, ton changement est transmis à l’équipe technique.<br/>
+          Activation sous 48h si place disponible.
+        </p>
+      </section>
+    </div>
+  )
+}
+
+// -------- FORMULAIRE LOGIN / REGISTER --------
+
+function AuthForm({ onLogin, onRegister }) {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+
+  return (
+    <div className="auth-box">
+      <input
+        placeholder="Email"
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Mot de passe"
+        onChange={(e) => setPassword(e.target.value)}
+      />
+
+      <button onClick={() => onLogin(email, password)}>
+        Connexion
+      </button>
+
+      <button onClick={() => onRegister(email, password)}>
+        Créer un compte
+      </button>
+    </div>
   )
 }
