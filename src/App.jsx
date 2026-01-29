@@ -1,162 +1,136 @@
-import { useEffect, useState } from "react"
-import { supabase } from "./supabaseClient"
-import AdminRequests from "./AdminRequests"
-
-const ADMIN_EMAIL = "admin@cloudstoragepro.fr"
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "./supabaseClient";
+import "./styles.css";
 
 export default function App() {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [plan, setPlan] = useState("Aucun choisi")
+  // ------- FORMULAIRE CONTACT -------
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactLoading, setContactLoading] = useState(false);
+  const [contactStatus, setContactStatus] = useState({ type: "", text: "" });
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null)
-      setLoading(false)
-    })
+  const isContactValid = useMemo(() => {
+    const nameOk = contactName.trim().length >= 2;
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim());
+    const msgOk = contactMessage.trim().length >= 5;
+    return nameOk && emailOk && msgOk;
+  }, [contactName, contactEmail, contactMessage]);
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-  }, [])
+  async function handleContactSubmit(e) {
+    e.preventDefault();
+    setContactStatus({ type: "", text: "" });
 
-  async function signIn(email, password) {
-    await supabase.auth.signInWithPassword({ email, password })
+    if (!isContactValid) {
+      setContactStatus({
+        type: "error",
+        text: "Merci de remplir correctement le nom, l’email et le message.",
+      });
+      return;
+    }
+
+    try {
+      setContactLoading(true);
+
+      const payload = {
+        name: contactName.trim(),
+        email: contactEmail.trim(),
+        message: contactMessage.trim(),
+      };
+
+      const { error } = await supabase.from("messages_contact").insert(payload);
+
+      if (error) {
+        // Souvent: RLS pas activé/policy manquante, ou table pas créée
+        throw new Error(error.message);
+      }
+
+      setContactStatus({
+        type: "success",
+        text: "✅ Message envoyé ! Nous vous répondrons rapidement.",
+      });
+
+      setContactName("");
+      setContactEmail("");
+      setContactMessage("");
+    } catch (err) {
+      setContactStatus({
+        type: "error",
+        text:
+          "❌ Impossible d’envoyer le message. Vérifie Supabase (table + RLS + policy). Détail: " +
+          (err?.message || "Erreur inconnue"),
+      });
+    } finally {
+      setContactLoading(false);
+    }
   }
 
-  async function signUp(email, password) {
-    await supabase.auth.signUp({ email, password })
-  }
-
-  async function signOut() {
-    await supabase.auth.signOut()
-  }
-
-  async function requestPlan(newPlan) {
-    if (!user) return
-
-    await supabase.from("demandes_abonnement").insert({
-      user_id: user.id,
-      email: user.email,
-      plan: newPlan
-    })
-
-    alert("✅ Demande envoyée à l’équipe technique.\nTraitement sous 48h si disponible.")
-  }
-
-  if (loading) return <div>Chargement...</div>
-
-  // ---------- SI PAS CONNECTÉ ----------
-  if (!user) {
-    return (
-      <div className="login-page">
-        <img src="/logo.png" className="logo" />
-
-        <h1>CloudStoragePro</h1>
-
-        <AuthForm onLogin={signIn} onRegister={signUp} />
-      </div>
-    )
-  }
-
-  const isAdmin = user.email === ADMIN_EMAIL
-
-  // ---------- SI ADMIN ----------
-  if (isAdmin) {
-    return (
-      <div className="container">
-        <header>
-          <img src="/logo.png" className="logo-small" />
-          <button onClick={signOut}>Déconnexion</button>
-        </header>
-
-        <AdminRequests />
-      </div>
-    )
-  }
-
-  // ---------- SI UTILISATEUR ----------
-  return (
-    <div className="container">
-
-      <header>
-        <img src="/logo.png" className="logo-small" />
-        <div className="user-info">
-          {user.email}
-          <button onClick={signOut}>Déconnexion</button>
-        </div>
-      </header>
-
-      <section className="hero">
-        <div className="hero-text">
-          <h1>Stockage Cloud Sécurisé</h1>
-          <p>Synchronisation & sauvegarde</p>
-        </div>
-
-        <div className="hero-card">
-          <img src="/logo.png" className="hero-logo" />
-          <p>CloudStoragePro</p>
-          <small>Nombre d’abonnés actifs : </small>
-          <b>— connecté —</b>
-        </div>
-      </section>
-
-      <section className="client-box">
-        <h2>Espace client</h2>
-
-        <p><b>Bienvenue</b> {user.email}</p>
-
-        <div className="status-row">
-          <div className="status-card">
-            <small>Abonnement</small>
-            <b>{plan}</b>
-          </div>
-          <div className="status-card">
-            <small>Statut</small>
-            <b>Connecté ✅</b>
-          </div>
-        </div>
-
-        <div className="buttons">
-          <button onClick={() => requestPlan("Basique")}>Basique – 4.99€</button>
-          <button onClick={() => requestPlan("Pro")}>Pro – 9.99€</button>
-          <button onClick={() => requestPlan("Premium")}>Premium – 19.99€</button>
-        </div>
-
-        <p className="info">
-          Après demande, ton changement est transmis à l’équipe technique.<br/>
-          Activation sous 48h si place disponible.
-        </p>
-      </section>
-    </div>
-  )
-}
-
-// -------- FORMULAIRE LOGIN / REGISTER --------
-
-function AuthForm({ onLogin, onRegister }) {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  // ------- PAGE (tu peux garder ton design actuel) -------
+  // Ici je te mets une structure simple + la section Contact,
+  // si tu as déjà toute ta landing page, tu peux juste copier la section <section id="contact">…</section>
 
   return (
-    <div className="auth-box">
-      <input
-        placeholder="Email"
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Mot de passe"
-        onChange={(e) => setPassword(e.target.value)}
-      />
+    <div className="page">
+      {/* ✅ Tu peux garder ton header / hero / tarifs etc. */}
+      {/* --- SECTION CONTACT --- */}
+      <section id="contact" className="contactSection">
+        <h2 className="sectionTitle">Contactez-Nous</h2>
 
-      <button onClick={() => onLogin(email, password)}>
-        Connexion
-      </button>
+        <div className="contactCard">
+          <form className="contactForm" onSubmit={handleContactSubmit}>
+            <input
+              className="input"
+              type="text"
+              placeholder="Nom"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              autoComplete="name"
+            />
 
-      <button onClick={() => onRegister(email, password)}>
-        Créer un compte
-      </button>
+            <input
+              className="input"
+              type="email"
+              placeholder="Email"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              autoComplete="email"
+            />
+
+            <textarea
+              className="textarea"
+              placeholder="Message"
+              value={contactMessage}
+              onChange={(e) => setContactMessage(e.target.value)}
+              rows={5}
+            />
+
+            {contactStatus.text ? (
+              <div
+                className={
+                  contactStatus.type === "success"
+                    ? "alert success"
+                    : "alert error"
+                }
+              >
+                {contactStatus.text}
+              </div>
+            ) : null}
+
+            <button
+              className="btnPrimary"
+              type="submit"
+              disabled={contactLoading || !isContactValid}
+            >
+              {contactLoading ? "Envoi..." : "Envoyer"}
+            </button>
+
+            <div className="hint">
+              Les messages sont enregistrés dans Supabase →{" "}
+              <b>messages_contact</b>.
+            </div>
+          </form>
+        </div>
+      </section>
     </div>
-  )
+  );
 }
