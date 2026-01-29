@@ -690,7 +690,7 @@ function Contact() {
 
         <form
           className="contactForm"
-          action="https://formsubmit.co/contact@michaelcreation.fr"
+          action="https://formsubmit.co/michaelpruvost45@gmail.com"
           method="POST"
           target="hiddenFrame"
           onSubmit={handleSubmit}
