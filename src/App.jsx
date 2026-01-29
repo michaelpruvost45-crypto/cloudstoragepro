@@ -665,23 +665,39 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
    ========================= */
 
 function Contact() {
+  const [sent, setSent] = useState(false);
+
+  function handleSubmit() {
+    // Affiche popup après envoi (le vrai envoi part dans l'iframe)
+    setSent(true);
+    setTimeout(() => setSent(false), 5000);
+  }
+
   return (
     <section id="contact" className="section">
       <div className="container">
         <h2 className="section__title">Contactez-Nous</h2>
 
+        {/* Iframe caché pour éviter la redirection */}
+        <iframe
+          name="hidden_iframe"
+          title="hidden_iframe"
+          style={{ display: "none" }}
+        />
+
         <form
           className="contactForm"
           action="https://formsubmit.co/contact@michaelcreation.fr"
           method="POST"
-          target="_blank"
+          target="hidden_iframe"
+          onSubmit={handleSubmit}
         >
-          {/* Anti-spam */}
           <input type="hidden" name="_captcha" value="false" />
-          <input type="hidden" name="_subject" value="Nouveau message - CloudStoragePro" />
+          <input type="hidden" name="_subject" value="Nouveau message CloudStoragePro" />
+
+          {/* IMPORTANT: active l'email chez FormSubmit (sinon pas d'envoi) */}
           <input type="hidden" name="_template" value="table" />
 
-          {/* Champs */}
           <input className="input" name="name" placeholder="Nom" required />
           <input className="input" type="email" name="email" placeholder="Email" required />
           <textarea className="textarea" name="message" placeholder="Message" rows={5} required />
@@ -691,9 +707,24 @@ function Contact() {
           </button>
         </form>
       </div>
+
+      {sent && (
+        <div className="modalOverlay">
+          <div className="modalCard">
+            <div className="successIcon">✓</div>
+            <h3>Merci pour votre message !</h3>
+            <p>Votre demande a bien été envoyée.</p>
+            <button className="btn btn--primary" onClick={() => setSent(false)}>
+              Fermer
+            </button>
+            <div className="autoClose">Fermeture automatique dans 5 secondes…</div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
+
 
 
 
