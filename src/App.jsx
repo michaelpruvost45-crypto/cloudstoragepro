@@ -666,18 +666,43 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
 
 function Contact() {
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  function handleSubmit(e) {
-    // vide le formulaire après envoi
-    e.target.reset();
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErrorMsg("");
+    setSending(true);
 
-    // affiche la popup
-    setSent(true);
+    try {
+      const form = e.currentTarget;
+      const data = new FormData(form);
 
-    // fermeture automatique après 5 sec
-    setTimeout(() => {
-      setSent(false);
-    }, 5000);
+      // IMPORTANT: endpoint FormSubmit
+      const res = await fetch("https://formsubmit.co/ajax/contact@michaelcreation.fr", {
+        method: "POST",
+        body: data,
+        headers: { Accept: "application/json" }
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(
+          (json && (json.message || json.error)) ||
+            `Erreur FormSubmit (HTTP ${res.status})`
+        );
+      }
+
+      // OK
+      form.reset();
+      setSent(true);
+      setTimeout(() => setSent(false), 5000);
+    } catch (err) {
+      setErrorMsg(err?.message || "Erreur inconnue");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -685,23 +710,9 @@ function Contact() {
       <div className="container">
         <h2 className="section__title">Contactez-Nous</h2>
 
-        {/* iframe caché pour éviter la redirection */}
-        <iframe name="hiddenFrame" style={{ display: "none" }}></iframe>
-
-        <form
-          className="contactForm"
-          action="https://formsubmit.co/michaelpruvost45@gmail.com"
-          method="POST"
-          target="hiddenFrame"
-          onSubmit={handleSubmit}
-        >
-          {/* Options FormSubmit */}
+        <form className="contactForm" onSubmit={handleSubmit}>
           <input type="hidden" name="_captcha" value="false" />
-          <input
-            type="hidden"
-            name="_subject"
-            value="Nouveau message CloudStoragePro"
-          />
+          <input type="hidden" name="_subject" value="Nouveau message CloudStoragePro" />
 
           <input
             className="input"
@@ -727,39 +738,37 @@ function Contact() {
             required
           />
 
-          <button className="btn btn--primary btn--center" type="submit">
-            Envoyer
+          <button className="btn btn--primary btn--center" type="submit" disabled={sending}>
+            {sending ? "Envoi..." : "Envoyer"}
           </button>
+
+          {errorMsg && (
+            <div style={{ marginTop: 10, color: "#ff5a5a", fontWeight: 800 }}>
+              ❌ {errorMsg}
+            </div>
+          )}
         </form>
       </div>
 
-      {/* ===== POPUP MERCI ===== */}
       {sent && (
         <div className="modalOverlay">
           <div className="modalCard">
             <div className="successIcon">✓</div>
             <h3>Merci pour votre message !</h3>
-            <p>
-              Votre demande a bien été envoyée.  
-              Nous vous répondrons rapidement.
-            </p>
+            <p>Votre demande a bien été envoyée. Nous vous répondrons rapidement.</p>
 
-            <button
-              className="btn btn--primary"
-              onClick={() => setSent(false)}
-            >
+            <button className="btn btn--primary" onClick={() => setSent(false)}>
               Fermer
             </button>
 
-            <div className="autoClose">
-              Fermeture automatique dans 5 secondes…
-            </div>
+            <div className="autoClose">Fermeture automatique dans 5 secondes…</div>
           </div>
         </div>
       )}
     </section>
   );
 }
+
 
 
 
