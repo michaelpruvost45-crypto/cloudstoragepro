@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
-import logo from "/logo.png";
 
 export default function App() {
   const [openAuth, setOpenAuth] = useState(false);
@@ -15,12 +14,6 @@ export default function App() {
 
   // Autoriser changement plan uniquement via bouton "Changer mon abonnement"
   const [allowPlanChange, setAllowPlanChange] = useState(false);
-
-  // Contact + popup merci
-  const [thanksOpen, setThanksOpen] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [contactError, setContactError] = useState("");
-  const [contact, setContact] = useState({ name: "", email: "", message: "" });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
@@ -68,7 +61,11 @@ export default function App() {
           last_name,
           plan: null,
           pending_plan: null,
-          change_requested_at: null
+          change_requested_at: null,
+          request_status: null,
+          request_note: null,
+          request_handled_at: null,
+          request_expires_at: null
         })
         .select("*")
         .single();
@@ -97,12 +94,13 @@ export default function App() {
 
     const hasActivePlan = !!profile?.plan;
     const hasPending = !!profile?.pending_plan;
+    const status = profile?.request_status || null;
 
     // Si déjà plan actif et pas en mode "changement autorisé"
     if (hasActivePlan && !allowPlanChange) return;
 
     // Si demande en attente, on bloque tout
-    if (hasPending) return;
+    if (hasPending && status === "pending") return;
 
     try {
       // 1) Première souscription => plan direct
@@ -125,12 +123,20 @@ export default function App() {
       }
 
       // 2) Changement => demande en attente (48h)
+      const now = new Date();
+      const expires = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
       const { data, error } = await supabase
         .from("profiles")
         .update({
           pending_plan: planName,
-          change_requested_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          change_requested_at: now.toISOString(),
+          request_status: "pending",
+          request_note:
+            "Demande envoyée à l’équipe technique. Le changement sera effectué sous 48h si place disponible.",
+          request_handled_at: null,
+          request_expires_at: expires.toISOString(),
+          updated_at: now.toISOString()
         })
         .eq("id", session.user.id)
         .select("*")
@@ -169,43 +175,20 @@ export default function App() {
       if (error) throw error;
       setProfile(data);
 
-      // 2) Update metadata
+      // 2) Update metadata (utile si tu veux garder ça côté auth)
       const { error: metaErr } = await supabase.auth.updateUser({
         data: { first_name, last_name }
       });
 
-      if (metaErr) console.warn("metadata update warning:", metaErr.message);
+      if (metaErr) {
+        console.warn("metadata update warning:", metaErr.message);
+      }
 
       setOpenEditProfile(false);
       alert("✅ Profil mis à jour !");
     } catch (e) {
       console.error(e);
       alert("❌ Impossible de modifier le profil.");
-    }
-  }
-
-  // ✅ Contact -> Supabase + popup
-  async function submitContact(e) {
-    e.preventDefault();
-    setContactError("");
-    setSending(true);
-
-    try {
-      const { error } = await supabase.from("messages_contact").insert({
-        name: contact.name,
-        email: contact.email,
-        message: contact.message
-      });
-
-      if (error) throw error;
-
-      setContact({ name: "", email: "", message: "" });
-      setThanksOpen(true);
-    } catch (err) {
-      console.error(err);
-      setContactError(err?.message || "Erreur lors de l’envoi.");
-    } finally {
-      setSending(false);
     }
   }
 
@@ -218,6 +201,10 @@ export default function App() {
 
   const currentPlan = profile?.plan || null;
   const pendingPlan = profile?.pending_plan || null;
+
+  const requestStatus = profile?.request_status || null; // pending | accepted | rejected | expired | null
+  const requestNote = profile?.request_note || null;
+  const requestExpiresAt = profile?.request_expires_at || null;
 
   return (
     <div>
@@ -237,6 +224,9 @@ export default function App() {
           email={userEmail}
           currentPlan={currentPlan}
           pendingPlan={pendingPlan}
+          requestStatus={requestStatus}
+          requestNote={requestNote}
+          requestExpiresAt={requestExpiresAt}
           loading={profileLoading}
           onEditProfile={() => setOpenEditProfile(true)}
           onChooseFirstPlan={() => {
@@ -258,53 +248,19 @@ export default function App() {
         isLoggedIn={isLoggedIn}
         currentPlan={currentPlan}
         pendingPlan={pendingPlan}
+        requestStatus={requestStatus}
         allowPlanChange={allowPlanChange}
         onOpenAuth={() => setOpenAuth(true)}
         onPlanClick={handlePlanClick}
       />
 
-      {/* CONTACT (fonctionnel) */}
-      <section id="contact" className="section section-soft">
-        <div className="container">
-          <h2 className="section-title">Contactez-Nous</h2>
-
-          <form className="contactForm" onSubmit={submitContact}>
-            <input
-              required
-              placeholder="Nom"
-              value={contact.name}
-              onChange={(e) => setContact({ ...contact, name: e.target.value })}
-            />
-            <input
-              required
-              type="email"
-              placeholder="Email"
-              value={contact.email}
-              onChange={(e) => setContact({ ...contact, email: e.target.value })}
-            />
-            <textarea
-              required
-              placeholder="Message"
-              rows={5}
-              value={contact.message}
-              onChange={(e) => setContact({ ...contact, message: e.target.value })}
-            />
-
-            <button className="btn btn-primary" type="submit" disabled={sending}>
-              {sending ? "Envoi..." : "Envoyer"}
-            </button>
-
-            {contactError && <div className="formError">❌ {contactError}</div>}
-          </form>
-        </div>
-      </section>
-
+      <Contact />
       <Footer />
 
-      {/* MODAL AUTH */}
-      {openAuth && <AuthModal onClose={() => setOpenAuth(false)} onLoggedIn={() => setOpenAuth(false)} />}
+      {openAuth && (
+        <AuthModal onClose={() => setOpenAuth(false)} onLoggedIn={() => setOpenAuth(false)} />
+      )}
 
-      {/* MODAL EDIT PROFILE */}
       {openEditProfile && (
         <EditProfileModal
           onClose={() => setOpenEditProfile(false)}
@@ -314,20 +270,7 @@ export default function App() {
         />
       )}
 
-      {/* POPUP MERCI CONTACT */}
-      {thanksOpen && (
-        <Modal title="Merci 🙏" onClose={() => setThanksOpen(false)}>
-          <p style={{ margin: "10px 0 18px" }}>
-            Votre message a bien été envoyé. Nous vous répondrons rapidement.
-          </p>
-          <button className="btn btn-primary" onClick={() => setThanksOpen(false)}>
-            Fermer
-          </button>
-        </Modal>
-      )}
-
-      {/* mini CSS (uniquement pour l'espace client / modals supplémentaires) */}
-      <style>{extraCss}</style>
+      <style>{css}</style>
     </div>
   );
 }
@@ -339,21 +282,21 @@ export default function App() {
 function Header({ isLoggedIn, userEmail, fullName, onOpenAuth, onLogout }) {
   return (
     <header className="topbar">
-      <div className="container topbar-inner">
-        <a className="brand" href="#home">
-          <img src={logo} alt="CloudStoragePro" />
-          <span>CloudStoragePro</span>
+      <div className="container topbar__inner">
+        <a className="brand" href="#top">
+          <img className="brand__logo" src="/logo.png" alt="CloudStoragePro logo" />
+          <span className="brand__name">CloudStoragePro</span>
         </a>
 
         <nav className="nav">
-          <a href="#home">Accueil</a>
+          <a href="#top">Accueil</a>
           <a href="#features">Fonctionnalités</a>
           <a href="#pricing">Tarifs</a>
           <a href="#contact">Contact</a>
         </nav>
 
         {!isLoggedIn ? (
-          <button className="btn btn-outline" onClick={onOpenAuth}>
+          <button className="btn btn--light" onClick={onOpenAuth}>
             Connexion
           </button>
         ) : (
@@ -362,7 +305,7 @@ function Header({ isLoggedIn, userEmail, fullName, onOpenAuth, onLogout }) {
               <div className="userBox__name">{fullName || "Utilisateur"}</div>
               <div className="userBox__email">{userEmail}</div>
             </div>
-            <button className="btn btn-outline" onClick={onLogout}>
+            <button className="btn btn--light" onClick={onLogout}>
               Déconnexion
             </button>
           </div>
@@ -374,35 +317,40 @@ function Header({ isLoggedIn, userEmail, fullName, onOpenAuth, onLogout }) {
 
 function Hero({ onOpenAuth }) {
   return (
-    <section className="hero" id="home">
-      <div className="hero-bg-bubbles" />
-      <div className="container hero-grid">
-        <div className="hero-left">
+    <section id="top" className="hero">
+      <div className="container hero__inner">
+        <div className="hero__left">
           <h1>
-            Stockage Cloud Sécurisé <br /> Pour Vos Données
+            Stockage Cloud Sécurisé <br />
+            Pour Vos Données
           </h1>
           <p>Stockez et sauvegardez vos fichiers en toute sécurité sur CloudStoragePro.</p>
 
-          <div className="hero-buttons">
-            <a href="#pricing" className="btn btn-primary">
+          <div className="hero__cta">
+            <a className="btn btn--primary" href="#pricing">
               Voir les abonnements
             </a>
-            <button className="btn btn-ghost" onClick={onOpenAuth}>
+            <button className="btn btn--ghost" onClick={onOpenAuth}>
               Connexion
             </button>
           </div>
         </div>
 
-        <div className="hero-right">
-          <div className="hero-card">
-            <div className="hero-card-inner">
-              <img className="hero-card-logo" src={logo} alt="logo" />
-              <h3>Cloud sécurisé</h3>
-              <p>Synchronisation & sauvegarde</p>
+        <div className="hero__right">
+          <div className="heroCard">
+            <div className="heroCard__bubble" />
+            <div className="heroCard__bubble heroCard__bubble--2" />
+            <div className="heroCard__bubble heroCard__bubble--3" />
+            <div className="heroCard__big">
+              <div className="heroCard__icon">☁️</div>
+              <div className="heroCard__title">Cloud sécurisé</div>
+              <div className="heroCard__sub">Synchronisation & sauvegarde</div>
             </div>
           </div>
         </div>
       </div>
+
+      <div className="hero__clouds" />
     </section>
   );
 }
@@ -413,7 +361,7 @@ function Hero({ onOpenAuth }) {
 
 function TeaserClientArea({ onOpenAuth }) {
   return (
-    <section className="section section-soft">
+    <section className="section section--soft">
       <div className="container">
         <div className="clientCard">
           <div>
@@ -424,10 +372,10 @@ function TeaserClientArea({ onOpenAuth }) {
           </div>
 
           <div className="clientActions">
-            <button className="btn btn-primary" onClick={onOpenAuth}>
+            <button className="btn btn--primary" onClick={onOpenAuth}>
               Se connecter
             </button>
-            <a className="btn btn-outlineLight" href="#pricing">
+            <a className="btn btn--light" href="#pricing">
               Voir les offres
             </a>
           </div>
@@ -442,6 +390,9 @@ function ClientArea({
   email,
   currentPlan,
   pendingPlan,
+  requestStatus,
+  requestNote,
+  requestExpiresAt,
   loading,
   onEditProfile,
   onChooseFirstPlan,
@@ -449,9 +400,68 @@ function ClientArea({
 }) {
   const hasPlan = !!currentPlan;
   const hasPending = !!pendingPlan;
+  const isPending = requestStatus === "pending" && hasPending;
+
+  // Affichage "propre" du statut
+  function renderRequestBox() {
+    if (!requestStatus && !requestNote) return null;
+
+    // pending
+    if (requestStatus === "pending") {
+      return (
+        <div className="pendingBox">
+          ✅ Demande de changement envoyée : <strong>{pendingPlan}</strong>
+          <br />
+          <span className="pendingSmall">
+            Le changement sera effectué sous 48h si place disponible.
+            {requestExpiresAt ? (
+              <>
+                <br />
+                <span style={{ opacity: 0.9 }}>
+                  Expire le :{" "}
+                  <strong>{new Date(requestExpiresAt).toLocaleString()}</strong>
+                </span>
+              </>
+            ) : null}
+          </span>
+        </div>
+      );
+    }
+
+    // accepted / rejected / expired
+    if (requestStatus === "accepted") {
+      return (
+        <div className="statusBox statusBox--ok">
+          ✅ {requestNote || "Votre demande a été acceptée."}
+        </div>
+      );
+    }
+
+    if (requestStatus === "rejected") {
+      return (
+        <div className="statusBox statusBox--bad">
+          ❌ {requestNote || "Votre demande a été refusée."}
+        </div>
+      );
+    }
+
+    if (requestStatus === "expired") {
+      return (
+        <div className="statusBox statusBox--warn">
+          ⏳ {requestNote || "Aucune réponse sous 48h. Veuillez refaire votre demande."}
+        </div>
+      );
+    }
+
+    return (
+      <div className="statusBox statusBox--info">
+        ℹ️ {requestNote || "Mise à jour de votre demande."}
+      </div>
+    );
+  }
 
   return (
-    <section className="section section-soft">
+    <section className="section section--soft">
       <div className="container">
         <div className="clientCard">
           <div>
@@ -465,7 +475,7 @@ function ClientArea({
             <div className="clientInfo">
               <div className="infoItem">
                 <div className="infoLabel">Abonnement</div>
-                <div className="infoValue">{loading ? "Chargement..." : currentPlan || "Aucun choisi"}</div>
+                <div className="infoValue">{loading ? "Chargement..." : currentPlan || "Aucun"}</div>
               </div>
 
               <div className="infoItem">
@@ -474,33 +484,27 @@ function ClientArea({
               </div>
             </div>
 
-            {hasPending && (
-              <div className="pendingBox">
-                ✅ Demande de changement envoyée : <strong>{pendingPlan}</strong>
-                <br />
-                <span className="pendingSmall">Le changement sera effectué sous 48h si place disponible.</span>
-              </div>
-            )}
+            {renderRequestBox()}
           </div>
 
           <div className="clientActions">
-            <button className="btn btn-outlineLight" onClick={onEditProfile}>
+            <button className="btn btn--light" onClick={onEditProfile}>
               Modifier mon profil
             </button>
 
             {!hasPlan ? (
-              <button className="btn btn-primary" onClick={onChooseFirstPlan}>
-                Choisir / changer mon abonnement
+              <button className="btn btn--primary" onClick={onChooseFirstPlan}>
+                Choisir mon abonnement
               </button>
             ) : (
-              <button className="btn btn-primary" onClick={onRequestChange} disabled={hasPending}>
-                {hasPending ? "Changement en attente" : "Changer mon abonnement"}
+              <button className="btn btn--primary" onClick={onRequestChange} disabled={isPending}>
+                {isPending ? "Changement en attente" : "Changer mon abonnement"}
               </button>
             )}
 
             <button
-              className="btn btn-outlineLight"
-              onClick={() => alert("📁 Mes fichiers : à brancher plus tard (NAS / Synology / MinIO).")}
+              className="btn btn--light"
+              onClick={() => alert("📁 Mes fichiers : on l’ajoutera quand tu connecteras MinIO/Synology.")}
             >
               Mes fichiers (bientôt)
             </button>
@@ -536,39 +540,47 @@ function EditProfileModal({ onClose, initialFirstName, initialLastName, onSave }
   }
 
   return (
-    <Modal title="Modifier mon profil" onClose={onClose}>
-      <form onSubmit={submit}>
-        <label className="authLabel">
-          Prénom <span className="req">*</span>
-          <input
-            className="authInput"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            placeholder="ex: Alex"
-          />
-          {!firstOk && <div className="fieldError">Prénom obligatoire</div>}
-        </label>
-
-        <label className="authLabel">
-          Nom <span className="req">*</span>
-          <input
-            className="authInput"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            placeholder="ex: Dupont"
-          />
-          {!lastOk && <div className="fieldError">Nom obligatoire</div>}
-        </label>
-
-        <button className="btn btn-primary btnFull" type="submit" disabled={!firstOk || !lastOk || saving}>
-          {saving ? "Enregistrement..." : "Enregistrer"}
+    <div className="modalOverlay" role="dialog" aria-modal="true">
+      <div className="modalCard">
+        <button className="modalClose" onClick={onClose} aria-label="Fermer">
+          ✕
         </button>
 
-        <button className="btn btn-outlineLight btnFull" type="button" onClick={onClose} style={{ marginTop: 10 }}>
-          Annuler
-        </button>
-      </form>
-    </Modal>
+        <h3 className="authTitle">Modifier mon profil</h3>
+
+        <form onSubmit={submit}>
+          <label className="authLabel">
+            Prénom <span className="req">*</span>
+            <input
+              className="authInput"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="ex: Alex"
+            />
+            {!firstOk && <div className="fieldError">Prénom obligatoire</div>}
+          </label>
+
+          <label className="authLabel">
+            Nom <span className="req">*</span>
+            <input
+              className="authInput"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="ex: Dupont"
+            />
+            {!lastOk && <div className="fieldError">Nom obligatoire</div>}
+          </label>
+
+          <button className="btn btn--primary btn--full" type="submit" disabled={!firstOk || !lastOk || saving}>
+            {saving ? "Enregistrement..." : "Enregistrer"}
+          </button>
+
+          <button className="btn btn--light btn--full" type="button" onClick={onClose} style={{ marginTop: 10 }}>
+            Annuler
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -584,15 +596,15 @@ function Services() {
   ];
 
   return (
-    <section id="features" className="section section-soft">
+    <section id="features" className="section">
       <div className="container">
-        <h2 className="section-title">Nos Services</h2>
-        <div className="features-grid">
+        <h2 className="section__title">Nos Services</h2>
+        <div className="grid3">
           {items.map((it) => (
-            <div key={it.title} className="feature-card">
-              <div className="feature-ico">{it.icon}</div>
-              <div className="feature-title">{it.title}</div>
-              <div className="feature-desc">{it.desc}</div>
+            <div key={it.title} className="serviceCard">
+              <div className="serviceCard__icon">{it.icon}</div>
+              <div className="serviceCard__title">{it.title}</div>
+              <div className="serviceCard__desc">{it.desc}</div>
             </div>
           ))}
         </div>
@@ -601,7 +613,7 @@ function Services() {
   );
 }
 
-function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanChange, onPlanClick }) {
+function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, requestStatus, allowPlanChange, onPlanClick }) {
   const plans = useMemo(
     () => [
       {
@@ -632,20 +644,21 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
 
   const hasPlan = !!currentPlan;
   const hasPending = !!pendingPlan;
+  const isPending = requestStatus === "pending" && hasPending;
 
   function getActionState(planName) {
     if (!isLoggedIn) return { label: "CONNEXION", disabled: false, onClick: onOpenAuth };
 
-    // Si une demande est en attente => tout bloqué
-    if (hasPending) return { label: "BLOQUÉ", disabled: true, onClick: null };
+    // Si demande en attente => tout bloqué
+    if (isPending) return { label: "BLOQUÉ", disabled: true, onClick: null };
 
     // Si plan actif et pas autorisé => pas de changement possible depuis ici
-    if (hasPlan && !allowPlanChange) return { label: "BLOQUÉ", disabled: true, onClick: null };
+    if (hasPlan && !allowPlanChange) return { label: "INDISPONIBLE", disabled: true, onClick: null };
 
     // Si plan actif et autorisé => on peut demander un changement (mais pas vers le même)
     if (hasPlan && allowPlanChange) {
       if (planName === currentPlan) return { label: "DÉJÀ ACTIF", disabled: true, onClick: null };
-      return { label: "DEMANDER", disabled: false, onClick: () => onPlanClick(planName) };
+      return { label: "DEMANDER CE CHANGEMENT", disabled: false, onClick: () => onPlanClick(planName) };
     }
 
     // Si pas de plan => choisir direct
@@ -653,45 +666,46 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
   }
 
   return (
-    <section id="pricing" className="section">
+    <section id="pricing" className="section section--soft">
       <div className="container">
-        <h2 className="section-title">Choisissez Votre Abonnement</h2>
+        <h2 className="section__title">Choisissez Votre Abonnement</h2>
 
-        {isLoggedIn && hasPlan && !allowPlanChange && !hasPending && (
+        {isLoggedIn && hasPlan && !allowPlanChange && !isPending && (
           <div className="lockedMsg">
             🔒 Tu as déjà un abonnement actif. Pour demander un changement, clique sur{" "}
             <strong>“Changer mon abonnement”</strong> dans l’espace client.
           </div>
         )}
 
-        {isLoggedIn && hasPending && (
+        {isLoggedIn && isPending && (
           <div className="lockedMsg">
             ✅ Demande en cours : <strong>{pendingPlan}</strong> — changement sous 48h si place disponible.
           </div>
         )}
 
-        <div className="pricing-grid">
+        <div className="pricingGrid">
           {plans.map((p) => {
             const a = getActionState(p.name);
             return (
-              <div key={p.name} className={`price-card ${p.highlight ? "price-popular" : ""}`}>
-                {p.badge && <div className="badge">{p.badge}</div>}
+              <div key={p.name} className={`priceCard ${p.highlight ? "priceCard--pro" : ""}`}>
+                {p.badge && <div className="priceCard__badge">{p.badge}</div>}
 
-                <h3>{p.name}</h3>
+                <div className="priceCard__name">{p.name}</div>
 
-                <div className="price">
-                  <span className="price-big">{p.price}</span>
-                  <span className="price-suf">€ {p.per}</span>
+                <div className="priceCard__price">
+                  <span className="priceCard__currency">€</span>
+                  <span className="priceCard__amount">{p.price}</span>
+                  <span className="priceCard__per"> {p.per}</span>
                 </div>
 
-                <ul>
+                <ul className="priceCard__list">
                   {p.features.map((f) => (
                     <li key={f}>✓ {f}</li>
                   ))}
                 </ul>
 
                 <button
-                  className={`btn ${p.highlight ? "btn-gold" : "btn-primary"}`}
+                  className={`btn ${p.highlight ? "btn--gold" : "btn--primary"} btn--full`}
                   onClick={a.onClick || undefined}
                   disabled={a.disabled}
                   style={a.disabled ? { opacity: 0.65, cursor: "not-allowed" } : undefined}
@@ -707,10 +721,10 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
           <strong>Note :</strong>{" "}
           {!isLoggedIn
             ? "Connecte-toi pour choisir une offre."
-            : hasPending
+            : isPending
             ? "Changement en attente (48h si place disponible)."
             : hasPlan
-            ? "Le changement se demande via l’espace client."
+            ? "Gestion du changement uniquement via l’espace client."
             : "Tu peux choisir ton premier abonnement ici."}
         </div>
       </div>
@@ -719,14 +733,54 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
 }
 
 /* =========================
-   AUTH MODAL (login/signup/forgot + resend)
+   CONTACT / FOOTER
+   ========================= */
+
+function Contact() {
+  return (
+    <section id="contact" className="section">
+      <div className="container">
+        <h2 className="section__title">Contactez-Nous</h2>
+
+        {/* Placeholder (tu m'as dit ne pas toucher au reste pour l'instant) */}
+        <form className="contactForm" onSubmit={(e) => e.preventDefault()}>
+          <input className="input" placeholder="Nom" />
+          <input className="input" placeholder="Email" />
+          <textarea className="textarea" placeholder="Message" rows={5} />
+          <button className="btn btn--primary btn--center" type="submit">
+            Envoyer
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="footer">
+      <div className="container footer__inner">
+        <span>© {new Date().getFullYear()} CloudStoragePro — Tous droits réservés</span>
+      </div>
+    </footer>
+  );
+}
+
+/* =========================
+   AUTH MODAL (login/signup/forgot)
    ========================= */
 
 function AuthModal({ onClose, onLoggedIn }) {
   return (
-    <Modal title="Espace client" onClose={onClose}>
-      <AuthForm onLoggedIn={onLoggedIn} />
-    </Modal>
+    <div className="modalOverlay" role="dialog" aria-modal="true">
+      <div className="modalCard">
+        <button className="modalClose" onClick={onClose} aria-label="Fermer">
+          ✕
+        </button>
+
+        <AuthForm onLoggedIn={onLoggedIn} />
+      </div>
+    </div>
   );
 }
 
@@ -822,10 +876,10 @@ function AuthForm({ onLoggedIn }) {
   return (
     <div>
       <div className="authHead">
-        <img src={logo} alt="logo" className="authLogo" />
+        <img src="/logo.png" alt="logo" className="authLogo" />
         <div>
           <div className="authBrand">CloudStoragePro</div>
-          <div className="authSub">Connexion / Inscription</div>
+          <div className="authSub">Espace client</div>
         </div>
       </div>
 
@@ -835,14 +889,14 @@ function AuthForm({ onLoggedIn }) {
 
       <form onSubmit={submit}>
         {mode === "signup" && (
-          <div className="grid2">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <label className="authLabel">
               Prénom <span className="req">*</span>
               <input
                 className="authInput"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                placeholder="ex: Lucas"
+                placeholder="ex: Alex"
               />
               {!firstOk && <div className="fieldError">Prénom obligatoire</div>}
             </label>
@@ -853,7 +907,7 @@ function AuthForm({ onLoggedIn }) {
                 className="authInput"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                placeholder="ex: Martin"
+                placeholder="ex: Dupont"
               />
               {!lastOk && <div className="fieldError">Nom obligatoire</div>}
             </label>
@@ -867,7 +921,7 @@ function AuthForm({ onLoggedIn }) {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="ex: lucas.martin@email.com"
+            placeholder="ex: alex.dupont@email.com"
           />
         </label>
 
@@ -884,7 +938,7 @@ function AuthForm({ onLoggedIn }) {
           </label>
         )}
 
-        <button className="btn btn-primary btnFull" type="submit" disabled={loading || signupDisabled}>
+        <button className="btn btn--primary btn--full" type="submit" disabled={loading || signupDisabled}>
           {loading
             ? "Patiente..."
             : mode === "login"
@@ -929,74 +983,12 @@ function AuthForm({ onLoggedIn }) {
 }
 
 /* =========================
-   MODAL / FOOTER
+   CSS léger (pour les nouveaux blocs)
    ========================= */
 
-function Modal({ title, children, onClose }) {
-  return (
-    <div className="modalOverlay" role="dialog" aria-modal="true">
-      <div className="modalCard">
-        <button className="modalClose" onClick={onClose} aria-label="Fermer">
-          ✕
-        </button>
-        <h3 className="modalTitle">{title}</h3>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="footer">
-      © {new Date().getFullYear()} CloudStoragePro — Tous droits réservés
-    </footer>
-  );
-}
-
-/* =========================
-   EXTRA CSS
-   ========================= */
-
-const extraCss = `
-.userBox{display:flex;align-items:center;gap:12px}
-.userBox__who{display:flex;flex-direction:column;align-items:flex-end}
-.userBox__name{font-weight:900;line-height:1}
-.userBox__email{font-size:12px;opacity:.9}
-
-.clientCard{
-  background:#fff;
-  border-radius:18px;
-  box-shadow:0 14px 40px rgba(10,40,100,.12);
-  border:1px solid #e7efff;
-  padding:18px;
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:18px;
-}
-.clientTitle{margin:0 0 8px}
-.clientText{margin:0;font-weight:650;opacity:.9}
-.clientSmall{font-size:12px;opacity:.8}
-.clientInfo{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap}
-.infoItem{
-  background:#f3f7ff;
-  border:1px solid #d7e3ff;
-  border-radius:14px;
-  padding:12px;
-  min-width:170px;
-}
-.infoLabel{font-size:12px;opacity:.75;font-weight:900}
-.infoValue{font-weight:1000;margin-top:2px}
-.clientActions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
-
-.btn-outlineLight{
-  background:#fff;
-  border:1px solid #d7e3ff;
-  color:#0b3d91;
-}
-.btn-outlineLight:hover{border-color:#8cb7ff}
-.btnFull{width:100%}
+const css = `
+.req{color:#ffd36a;font-weight:1000;margin-left:4px}
+.fieldError{margin-top:6px;font-size:12px;color:#ffd36a;font-weight:900}
 
 .pendingBox{
   margin-top:12px;
@@ -1009,6 +1001,18 @@ const extraCss = `
 }
 .pendingSmall{font-size:12px;opacity:.85;font-weight:800}
 
+.statusBox{
+  margin-top:12px;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid;
+  font-weight:900;
+}
+.statusBox--ok{background:#eafff2;border-color:#b9f3cf;color:#0f6b3a}
+.statusBox--bad{background:#ffecec;border-color:#ffbdbd;color:#8a1f1f}
+.statusBox--warn{background:#fff6da;border-color:#ffe2a3;color:#5a3b00}
+.statusBox--info{background:#eef5ff;border-color:#cfe0ff;color:#173a6a}
+
 .lockedMsg{
   background:#ffffff;
   border:1px solid #e8eefb;
@@ -1019,32 +1023,16 @@ const extraCss = `
   color:#203b6a;
   font-weight:900;
 }
-.note{margin-top:14px;text-align:center;font-weight:700;opacity:.85}
 
-.authHead{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-.authLogo{height:40px;width:auto}
-.authBrand{font-weight:1000}
-.authSub{font-size:12px;opacity:.8;font-weight:800}
-.authTitle{margin:8px 0 10px}
-.authSwitch{
-  margin-top:10px;
-  background:transparent;
-  border:0;
-  color:#0a58ca;
-  font-weight:900;
-  cursor:pointer;
-  display:block;
-  width:100%;
-  text-align:left;
-}
-.authSwitch:hover{text-decoration:underline}
+/* Mini styles basiques si jamais ton CSS principal est ailleurs */
+.container{max-width:1100px;margin:0 auto;padding:0 16px}
+.section{padding:56px 0}
+.section--soft{background:#f6f9ff}
+.section__title{text-align:center;margin:0 0 22px;color:#10264d}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.pricingGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 
-.req{color:#f7b731;font-weight:1000;margin-left:4px}
-.fieldError{margin-top:6px;font-size:12px;color:#f7b731;font-weight:900}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-@media(max-width:700px){
-  .clientCard{flex-direction:column}
-  .userBox__who{align-items:flex-start}
-  .grid2{grid-template-columns:1fr}
+@media(max-width:900px){
+  .grid3,.pricingGrid{grid-template-columns:1fr}
 }
 `;
