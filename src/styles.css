@@ -1,8 +1,65 @@
 body {
   margin: 0;
-  font-family: Inter, Arial, sans-serif;
+  font-family: Arial, sans-serif;
   background: #f6f9ff;
   color: #10264d;
+}
+
+a {
+  color: white;
+  text-decoration: none;
+}
+
+.topbar {
+  background: linear-gradient(90deg, #0b3c91, #1a6be3);
+  padding: 16px 0;
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  color: white;
+  font-weight: bold;
+}
+
+nav a {
+  margin: 0 12px;
+}
+
+.btn-outline {
+  background: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: #1a6be3;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.hero {
+  background: linear-gradient(180deg, #0b3c91, #1a6be3);
+  color: white;
+  padding: 80px 0;
+}
+
+.section,
+.section-soft {
+  padding: 60px 0;
+}
+
+.section-soft {
+  background: #f6f9ff;
 }
 
 .container {
@@ -11,154 +68,70 @@ body {
   padding: 0 16px;
 }
 
-.topbar {
-  background: #fff;
-  border-bottom: 1px solid #e6ecfa;
-}
-
-.topbar-inner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 64px;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 900;
-}
-
-.logo img {
-  height: 34px;
-}
-
-nav a {
-  margin: 0 12px;
-  text-decoration: none;
-  font-weight: 600;
-  color: #10264d;
-}
-
-.hero {
-  padding: 80px 0;
-}
-
-.hero-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40px;
-}
-
-.hero-card {
-  background: #fff;
-  border-radius: 20px;
-  padding: 40px;
-  text-align: center;
-  box-shadow: 0 20px 60px rgba(16, 38, 77, 0.1);
-}
-
-.hero-logo {
-  width: 80px;
-}
-
-.section {
-  padding: 80px 0;
-}
-
-.section-soft {
-  background: #eef3ff;
-  padding: 80px 0;
-}
-
-.section-title {
-  text-align: center;
-  margin-bottom: 40px;
-}
-
 .features-grid,
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  gap: 20px;
 }
 
 .card,
 .price-card {
-  background: #fff;
-  padding: 30px;
-  border-radius: 20px;
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
   text-align: center;
-  box-shadow: 0 10px 30px rgba(16, 38, 77, 0.1);
 }
 
-.popular {
-  border: 2px solid #4f6df5;
-}
-
-.btn-primary {
-  background: #4f6df5;
-  color: #fff;
-  border: none;
-  padding: 12px 22px;
-  border-radius: 30px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 2px solid #4f6df5;
-  color: #4f6df5;
-  padding: 10px 20px;
-  border-radius: 30px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.contactForm {
-  max-width: 500px;
-  margin: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.price-card.popular {
+  border: 2px solid #1a6be3;
 }
 
 .contactForm input,
 .contactForm textarea {
+  width: 100%;
   padding: 12px;
-  border-radius: 10px;
-  border: 1px solid #ccd6f6;
+  margin-bottom: 12px;
 }
 
 .footer {
+  background: #0b3c91;
+  color: white;
   text-align: center;
-  padding: 30px;
-  background: #fff;
-  border-top: 1px solid #e6ecfa;
+  padding: 20px;
 }
 
-.modal {
+.modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,.6);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.modal-card {
-  background: #fff;
+.modal {
+  background: white;
   padding: 30px;
-  border-radius: 20px;
-  width: 350px;
+  border-radius: 12px;
+  width: 360px;
 }
 
-.modal-close {
+.close {
   float: right;
-  border: none;
   background: none;
-  font-size: 20px;
+  border: none;
   cursor: pointer;
+}
+
+.authLinks button {
+  background: none;
+  border: none;
+  color: #1a6be3;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.msg {
+  margin-top: 10px;
 }
