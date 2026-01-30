@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
+import "./styles.css";
 import { supabase } from "./supabaseClient";
+import logo from "/logo.png";
+
+/* =====================
+   APP
+===================== */
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [openAuth, setOpenAuth] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(
@@ -20,75 +25,97 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  if (loading) {
-    return <div className="loading">Chargement…</div>;
-  }
-
-  return (
-    <>
-      <Header session={session} />
-      <Hero />
-      {session ? <ClientArea session={session} /> : <GuestInfo />}
-      <Services />
-      <Pricing />
-      <Contact />
-      <Footer />
-    </>
-  );
-}
-
-/* ================= HEADER ================= */
-
-function Header({ session }) {
   async function logout() {
     await supabase.auth.signOut();
   }
 
   return (
+    <>
+      <Header
+        session={session}
+        onLogin={() => setOpenAuth(true)}
+        onLogout={logout}
+      />
+
+      <Hero onLogin={() => setOpenAuth(true)} />
+
+      <Features />
+
+      <Pricing session={session} onLogin={() => setOpenAuth(true)} />
+
+      <Contact />
+
+      <Footer />
+
+      {openAuth && (
+        <AuthModal onClose={() => setOpenAuth(false)} />
+      )}
+    </>
+  );
+}
+
+/* =====================
+   HEADER
+===================== */
+
+function Header({ session, onLogin, onLogout }) {
+  return (
     <header className="topbar">
       <div className="container topbar-inner">
-        <div className="logo">CloudStoragePro</div>
+        <div className="logo">
+          <img src={logo} alt="CloudStoragePro" />
+          <span>CloudStoragePro</span>
+        </div>
 
         <nav>
-          <a href="#top">Accueil</a>
-          <a href="#services">Fonctionnalités</a>
+          <a href="#home">Accueil</a>
+          <a href="#features">Fonctionnalités</a>
           <a href="#pricing">Tarifs</a>
           <a href="#contact">Contact</a>
         </nav>
 
-        {session ? (
-          <button className="btn light" onClick={logout}>
-            Déconnexion
+        {!session ? (
+          <button className="btn-outline" onClick={onLogin}>
+            Connexion
           </button>
         ) : (
-          <a className="btn light" href="/login">
-            Connexion
-          </a>
+          <button className="btn-outline" onClick={onLogout}>
+            Déconnexion
+          </button>
         )}
       </div>
     </header>
   );
 }
 
-/* ================= HERO ================= */
+/* =====================
+   HERO
+===================== */
 
-function Hero() {
+function Hero({ onLogin }) {
   return (
-    <section className="hero" id="top">
+    <section className="hero" id="home">
       <div className="container hero-grid">
         <div>
-          <h1>Stockage Cloud Sécurisé<br />Pour Vos Données</h1>
+          <h1>
+            Stockage Cloud Sécurisé <br /> Pour Vos Données
+          </h1>
           <p>
-            Stockez et sauvegardez vos fichiers en toute sécurité sur
-            CloudStoragePro.
+            Sauvegardez et accédez à vos fichiers partout, en toute sécurité.
           </p>
-          <div className="hero-actions">
-            <a href="#pricing" className="btn primary">Voir les abonnements</a>
-            <a href="/login" className="btn outline">Connexion</a>
+
+          <div className="hero-buttons">
+            <a href="#pricing" className="btn-primary">
+              Voir les abonnements
+            </a>
+            <button className="btn-outline" onClick={onLogin}>
+              Connexion
+            </button>
           </div>
         </div>
 
         <div className="hero-card">
+          <img src={logo} alt="logo" className="hero-logo" />
           <h3>Cloud sécurisé</h3>
           <p>Synchronisation & sauvegarde</p>
         </div>
@@ -97,132 +124,188 @@ function Hero() {
   );
 }
 
-/* ================= CLIENT ================= */
+/* =====================
+   FEATURES
+===================== */
 
-function ClientArea({ session }) {
+function Features() {
   return (
-    <section className="section soft">
+    <section id="features" className="section-soft">
       <div className="container">
-        <div className="client-card">
-          <h2>Espace client</h2>
-          <p>
-            Bienvenue <strong>{session.user.email}</strong>
-          </p>
+        <h2 className="section-title">Pourquoi CloudStoragePro ?</h2>
 
-          <div className="status-grid">
-            <div className="status-box">
-              <span>Abonnement</span>
-              <strong>Aucun</strong>
-            </div>
-            <div className="status-box">
-              <span>Statut</span>
-              <strong>Connecté ✅</strong>
-            </div>
-          </div>
-
-          <div className="client-actions">
-            <button className="btn primary">Modifier mon profil</button>
-            <button className="btn outline">Mes fichiers (bientôt)</button>
-          </div>
+        <div className="features-grid">
+          <div className="card">🔒 Sécurité maximale</div>
+          <div className="card">☁️ Stockage cloud privé</div>
+          <div className="card">⚡ Accès rapide partout</div>
+          <div className="card">💾 Sauvegarde automatique</div>
         </div>
       </div>
     </section>
   );
 }
 
-function GuestInfo() {
-  return (
-    <section className="section soft">
-      <div className="container center">
-        <h2>Espace client</h2>
-        <p>Connectez-vous pour accéder à votre espace personnel.</p>
-        <a href="/login" className="btn primary">Se connecter</a>
-      </div>
-    </section>
-  );
-}
+/* =====================
+   PRICING
+===================== */
 
-/* ================= SERVICES ================= */
-
-function Services() {
+function Pricing({ session, onLogin }) {
   return (
-    <section className="section" id="services">
+    <section id="pricing" className="section">
       <div className="container">
-        <h2 className="center">Nos Services</h2>
-        <div className="grid3">
-          <div className="card">☁️ Stockage évolutif</div>
-          <div className="card">🔒 Sécurité avancée</div>
-          <div className="card">⏱️ Accès 24/7</div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ================= PRICING ================= */
-
-function Pricing() {
-  return (
-    <section className="section soft" id="pricing">
-      <div className="container">
-        <h2 className="center">Choisissez votre abonnement</h2>
+        <h2 className="section-title">Nos Abonnements</h2>
 
         <div className="pricing-grid">
-          <div className="price-card">
-            <h3>Basique</h3>
-            <p className="price">4,99€ / mois</p>
-            <button className="btn primary">S'inscrire</button>
-          </div>
-
-          <div className="price-card featured">
-            <h3>Pro</h3>
-            <p className="price">9,99€ / mois</p>
-            <button className="btn gold">Essayer</button>
-          </div>
-
-          <div className="price-card">
-            <h3>Premium</h3>
-            <p className="price">19,99€ / mois</p>
-            <button className="btn primary">S'inscrire</button>
-          </div>
+          <PriceCard
+            title="Basic"
+            price="4.99€"
+            desc="100 Go de stockage"
+            session={session}
+            onLogin={onLogin}
+          />
+          <PriceCard
+            title="Pro"
+            price="9.99€"
+            desc="1 To de stockage"
+            highlight
+            session={session}
+            onLogin={onLogin}
+          />
+          <PriceCard
+            title="Premium"
+            price="19.99€"
+            desc="3 To de stockage"
+            session={session}
+            onLogin={onLogin}
+          />
         </div>
       </div>
     </section>
   );
 }
 
-/* ================= CONTACT ================= */
+function PriceCard({ title, price, desc, highlight, session, onLogin }) {
+  return (
+    <div className={`price-card ${highlight ? "popular" : ""}`}>
+      <h3>{title}</h3>
+      <p className="price">{price}<span>/mois</span></p>
+      <p>{desc}</p>
+
+      {!session ? (
+        <button className="btn-primary" onClick={onLogin}>
+          Connexion requise
+        </button>
+      ) : (
+        <button className="btn-primary">
+          Choisir
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* =====================
+   CONTACT (FormSubmit)
+===================== */
 
 function Contact() {
   return (
-    <section className="section" id="contact">
+    <section id="contact" className="section-soft">
       <div className="container">
-        <h2 className="center">Contactez-nous</h2>
+        <h2 className="section-title">Nous contacter</h2>
 
         <form
-          className="contact-form"
+          className="contactForm"
           action="https://formsubmit.co/contact@michaelcreation.fr"
           method="POST"
         >
           <input type="hidden" name="_captcha" value="false" />
-          <input type="hidden" name="_template" value="table" />
+          <input type="hidden" name="_subject" value="Nouveau message CloudStoragePro" />
 
           <input name="name" placeholder="Nom" required />
           <input name="email" type="email" placeholder="Email" required />
-          <textarea name="message" placeholder="Message" required />
-          <button className="btn primary">Envoyer</button>
+          <textarea name="message" placeholder="Message" rows="5" required />
+
+          <button type="submit" className="btn-primary">
+            Envoyer
+          </button>
         </form>
       </div>
     </section>
   );
 }
 
-/* ================= FOOTER ================= */
+/* =====================
+   FOOTER
+===================== */
 
 function Footer() {
   return (
     <footer className="footer">
       © {new Date().getFullYear()} CloudStoragePro — Tous droits réservés
     </footer>
+  );
+}
+
+/* =====================
+   AUTH MODAL
+===================== */
+
+function AuthModal({ onClose }) {
+  return (
+    <div className="modal">
+      <div className="modal-card">
+        <button className="modal-close" onClick={onClose}>×</button>
+
+        <h3>Connexion</h3>
+
+        <AuthForm onSuccess={onClose} />
+      </div>
+    </div>
+  );
+}
+
+function AuthForm({ onSuccess }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function login(e) {
+    e.preventDefault();
+    setMsg("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      setMsg(error.message);
+    } else {
+      onSuccess();
+    }
+  }
+
+  return (
+    <form onSubmit={login}>
+      <input
+        type="email"
+        placeholder="Email"
+        required
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Mot de passe"
+        required
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+      />
+      <button className="btn-primary" type="submit">
+        Se connecter
+      </button>
+      {msg && <p className="error">{msg}</p>}
+    </form>
   );
 }
