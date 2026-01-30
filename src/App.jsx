@@ -1,296 +1,228 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 
-/* ======================
-   APP
-====================== */
 export default function App() {
   const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [authOpen, setAuthOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    );
 
-    return () => sub.subscription.unsubscribe();
+    return () => listener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!session?.user) {
-      setProfile(null);
-      setLoadingProfile(false);
-      return;
-    }
-
-    loadProfile();
-  }, [session]);
-
-  async function loadProfile() {
-    setLoadingProfile(true);
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .single();
-
-    setProfile(data);
-    setLoadingProfile(false);
-  }
-
-  async function logout() {
-    await supabase.auth.signOut();
-    setProfile(null);
+  if (loading) {
+    return <div className="loading">Chargement…</div>;
   }
 
   return (
     <>
-      <Header
-        session={session}
-        profile={profile}
-        onLogin={() => setAuthOpen(true)}
-        onLogout={logout}
-      />
-
+      <Header session={session} />
       <Hero />
-
-      {!session && <GuestCTA onLogin={() => setAuthOpen(true)} />}
-
-      {session && profile && (
-        <>
-          <ClientArea profile={profile} reload={loadProfile} />
-          {profile.role === "admin" && <AdminPanel />}
-        </>
-      )}
-
+      {session ? <ClientArea session={session} /> : <GuestInfo />}
+      <Services />
       <Pricing />
-
       <Contact />
-
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
-
       <Footer />
     </>
   );
 }
 
-/* ======================
-   HEADER
-====================== */
-function Header({ session, profile, onLogin, onLogout }) {
+/* ================= HEADER ================= */
+
+function Header({ session }) {
+  async function logout() {
+    await supabase.auth.signOut();
+  }
+
   return (
     <header className="topbar">
-      <div className="container">
-        <strong>CloudStoragePro</strong>
+      <div className="container topbar-inner">
+        <div className="logo">CloudStoragePro</div>
+
         <nav>
+          <a href="#top">Accueil</a>
+          <a href="#services">Fonctionnalités</a>
           <a href="#pricing">Tarifs</a>
           <a href="#contact">Contact</a>
-          {!session ? (
-            <button onClick={onLogin}>Connexion</button>
-          ) : (
-            <button onClick={onLogout}>Déconnexion</button>
-          )}
         </nav>
+
+        {session ? (
+          <button className="btn light" onClick={logout}>
+            Déconnexion
+          </button>
+        ) : (
+          <a className="btn light" href="/login">
+            Connexion
+          </a>
+        )}
       </div>
     </header>
   );
 }
 
-/* ======================
-   HERO
-====================== */
+/* ================= HERO ================= */
+
 function Hero() {
   return (
-    <section className="hero">
-      <h1>Stockage Cloud Sécurisé</h1>
-      <p>Vos fichiers en toute sécurité</p>
-    </section>
-  );
-}
-
-/* ======================
-   ESPACE CLIENT
-====================== */
-function ClientArea({ profile, reload }) {
-  async function requestPlanChange(newPlan) {
-    await supabase
-      .from("profiles")
-      .update({
-        pending_plan: newPlan,
-        request_status: "pending",
-        request_note: "Demande envoyée à l’équipe technique.",
-      })
-      .eq("id", profile.id);
-
-    reload();
-  }
-
-  return (
-    <section className="client">
-      <h2>Espace client</h2>
-      <p><strong>Abonnement :</strong> {profile.plan || "Aucun"}</p>
-
-      {profile.request_status === "pending" && (
-        <div className="info">
-          ℹ️ {profile.request_note}
+    <section className="hero" id="top">
+      <div className="container hero-grid">
+        <div>
+          <h1>Stockage Cloud Sécurisé<br />Pour Vos Données</h1>
+          <p>
+            Stockez et sauvegardez vos fichiers en toute sécurité sur
+            CloudStoragePro.
+          </p>
+          <div className="hero-actions">
+            <a href="#pricing" className="btn primary">Voir les abonnements</a>
+            <a href="/login" className="btn outline">Connexion</a>
+          </div>
         </div>
-      )}
 
-      <button onClick={() => requestPlanChange("Pro")}>
-        Demander changement Pro
-      </button>
-    </section>
-  );
-}
-
-/* ======================
-   PANNEAU ADMIN
-====================== */
-function AdminPanel() {
-  const [users, setUsers] = useState([]);
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function load() {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("request_status", "pending");
-
-    setUsers(data || []);
-  }
-
-  async function accept(u) {
-    await supabase.from("profiles").update({
-      plan: u.pending_plan,
-      pending_plan: null,
-      request_status: "accepted",
-      request_note: "Votre demande a été acceptée.",
-    }).eq("id", u.id);
-
-    load();
-  }
-
-  async function refuse(u) {
-    await supabase.from("profiles").update({
-      pending_plan: null,
-      request_status: "refused",
-      request_note: "Votre demande a été refusée.",
-    }).eq("id", u.id);
-
-    load();
-  }
-
-  return (
-    <section className="admin">
-      <h2>Panneau admin</h2>
-      {users.map(u => (
-        <div key={u.id} className="adminCard">
-          <p>{u.email} → {u.pending_plan}</p>
-          <button onClick={() => accept(u)}>Accepter</button>
-          <button onClick={() => refuse(u)}>Refuser</button>
+        <div className="hero-card">
+          <h3>Cloud sécurisé</h3>
+          <p>Synchronisation & sauvegarde</p>
         </div>
-      ))}
+      </div>
     </section>
   );
 }
 
-/* ======================
-   TARIFS
-====================== */
+/* ================= CLIENT ================= */
+
+function ClientArea({ session }) {
+  return (
+    <section className="section soft">
+      <div className="container">
+        <div className="client-card">
+          <h2>Espace client</h2>
+          <p>
+            Bienvenue <strong>{session.user.email}</strong>
+          </p>
+
+          <div className="status-grid">
+            <div className="status-box">
+              <span>Abonnement</span>
+              <strong>Aucun</strong>
+            </div>
+            <div className="status-box">
+              <span>Statut</span>
+              <strong>Connecté ✅</strong>
+            </div>
+          </div>
+
+          <div className="client-actions">
+            <button className="btn primary">Modifier mon profil</button>
+            <button className="btn outline">Mes fichiers (bientôt)</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GuestInfo() {
+  return (
+    <section className="section soft">
+      <div className="container center">
+        <h2>Espace client</h2>
+        <p>Connectez-vous pour accéder à votre espace personnel.</p>
+        <a href="/login" className="btn primary">Se connecter</a>
+      </div>
+    </section>
+  );
+}
+
+/* ================= SERVICES ================= */
+
+function Services() {
+  return (
+    <section className="section" id="services">
+      <div className="container">
+        <h2 className="center">Nos Services</h2>
+        <div className="grid3">
+          <div className="card">☁️ Stockage évolutif</div>
+          <div className="card">🔒 Sécurité avancée</div>
+          <div className="card">⏱️ Accès 24/7</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ================= PRICING ================= */
+
 function Pricing() {
   return (
-    <section id="pricing">
-      <h2>Tarifs</h2>
-      <p>Basique / Pro / Premium</p>
+    <section className="section soft" id="pricing">
+      <div className="container">
+        <h2 className="center">Choisissez votre abonnement</h2>
+
+        <div className="pricing-grid">
+          <div className="price-card">
+            <h3>Basique</h3>
+            <p className="price">4,99€ / mois</p>
+            <button className="btn primary">S'inscrire</button>
+          </div>
+
+          <div className="price-card featured">
+            <h3>Pro</h3>
+            <p className="price">9,99€ / mois</p>
+            <button className="btn gold">Essayer</button>
+          </div>
+
+          <div className="price-card">
+            <h3>Premium</h3>
+            <p className="price">19,99€ / mois</p>
+            <button className="btn primary">S'inscrire</button>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
 
-/* ======================
-   CONTACT (SUPABASE)
-====================== */
+/* ================= CONTACT ================= */
+
 function Contact() {
-  const [sent, setSent] = useState(false);
-
-  async function submit(e) {
-    e.preventDefault();
-    const f = e.target;
-
-    await supabase.from("messages_contact").insert({
-      name: f.name.value,
-      email: f.email.value,
-      message: f.message.value,
-    });
-
-    setSent(true);
-    f.reset();
-  }
-
   return (
-    <section id="contact">
-      <h2>Contactez-nous</h2>
+    <section className="section" id="contact">
+      <div className="container">
+        <h2 className="center">Contactez-nous</h2>
 
-      {sent && <div className="success">Message envoyé ✅</div>}
+        <form
+          className="contact-form"
+          action="https://formsubmit.co/contact@michaelcreation.fr"
+          method="POST"
+        >
+          <input type="hidden" name="_captcha" value="false" />
+          <input type="hidden" name="_template" value="table" />
 
-      <form onSubmit={submit}>
-        <input name="name" placeholder="Nom" required />
-        <input name="email" type="email" placeholder="Email" required />
-        <textarea name="message" placeholder="Message" required />
-        <button>Envoyer</button>
-      </form>
+          <input name="name" placeholder="Nom" required />
+          <input name="email" type="email" placeholder="Email" required />
+          <textarea name="message" placeholder="Message" required />
+          <button className="btn primary">Envoyer</button>
+        </form>
+      </div>
     </section>
   );
 }
 
-/* ======================
-   AUTH MODAL
-====================== */
-function AuthModal({ onClose }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
+/* ================= FOOTER ================= */
 
-  async function login(e) {
-    e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({
-      email, password
-    });
-    if (error) setMsg(error.message);
-    else onClose();
-  }
-
-  async function forgot() {
-    await supabase.auth.resetPasswordForEmail(email);
-    setMsg("Email envoyé");
-  }
-
-  return (
-    <div className="modal">
-      <form onSubmit={login}>
-        <h3>Connexion</h3>
-        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" />
-        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mot de passe" />
-        <button>Se connecter</button>
-        <button type="button" onClick={forgot}>Mot de passe oublié</button>
-        {msg && <p>{msg}</p>}
-        <button type="button" onClick={onClose}>Fermer</button>
-      </form>
-    </div>
-  );
-}
-
-/* ======================
-   FOOTER
-====================== */
 function Footer() {
-  return <footer>© CloudStoragePro</footer>;
+  return (
+    <footer className="footer">
+      © {new Date().getFullYear()} CloudStoragePro — Tous droits réservés
+    </footer>
+  );
 }
