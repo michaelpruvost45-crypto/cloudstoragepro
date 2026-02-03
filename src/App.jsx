@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import "./index.css";
+import "./styles.css";
 
 export default function App() {
   const [session, setSession] = useState(null);
