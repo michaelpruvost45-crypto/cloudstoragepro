@@ -1,107 +1,73 @@
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f6f9ff;
-  color: #10264d;
-}
-
-a {
-  color: white;
-  text-decoration: none;
+  font-family: Inter, sans-serif;
+  background: #f5f8ff;
 }
 
 .topbar {
-  background: linear-gradient(90deg, #0b3c91, #1a6be3);
-  padding: 16px 0;
+  background: linear-gradient(90deg,#0b3c8f,#1677ff);
+  color: white;
+  padding: 16px;
 }
 
-.topbar-inner {
+.nav {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
 }
 
-.logo {
-  color: white;
-  font-weight: bold;
-}
-
-nav a {
-  margin: 0 12px;
-}
-
-.btn-outline {
-  background: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.btn-primary {
-  background: #1a6be3;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-}
+.nav a { color: white; margin: 0 10px; text-decoration: none; }
 
 .hero {
-  background: linear-gradient(180deg, #0b3c91, #1a6be3);
+  background: linear-gradient(135deg,#0b3c8f,#1e90ff);
   color: white;
-  padding: 80px 0;
+  padding: 80px 20px;
 }
 
-.section,
-.section-soft {
-  padding: 60px 0;
-}
-
-.section-soft {
-  background: #f6f9ff;
-}
-
-.container {
-  max-width: 1100px;
-  margin: auto;
-  padding: 0 16px;
-}
-
-.features-grid,
-.pricing-grid {
+.hero-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+}
+
+.hero-cloud {
+  font-size: 120px;
+  text-align: center;
+}
+
+.section { padding: 60px 20px; text-align: center; }
+.section.soft { background: #eef3ff; }
+
+.cards, .pricing {
+  display: flex;
   gap: 20px;
+  justify-content: center;
 }
 
-.card,
-.price-card {
+.card, .price-card {
   background: white;
-  padding: 24px;
-  border-radius: 12px;
-  text-align: center;
-}
-
-.price-card.popular {
-  border: 2px solid #1a6be3;
-}
-
-.contactForm input,
-.contactForm textarea {
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 12px;
-}
-
-.footer {
-  background: #0b3c91;
-  color: white;
-  text-align: center;
   padding: 20px;
+  border-radius: 14px;
+  width: 220px;
 }
 
-.modalOverlay {
+.price-card.pro {
+  background: linear-gradient(180deg,#1677ff,#0b3c8f);
+  color: white;
+}
+
+.btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.btn.primary { background: #1677ff; color: white; }
+.btn.white { background: white; color: #1677ff; }
+.btn.outline { background: transparent; border: 2px solid white; color: white; }
+
+.modal {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,.6);
@@ -110,28 +76,16 @@ nav a {
   justify-content: center;
 }
 
-.modal {
+.modal-box {
   background: white;
   padding: 30px;
-  border-radius: 12px;
-  width: 360px;
+  border-radius: 14px;
+  width: 300px;
 }
 
-.close {
-  float: right;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.authLinks button {
-  background: none;
-  border: none;
-  color: #1a6be3;
-  cursor: pointer;
-  margin-top: 10px;
-}
-
-.msg {
-  margin-top: 10px;
+footer {
+  padding: 20px;
+  text-align: center;
+  background: #0b3c8f;
+  color: white;
 }
