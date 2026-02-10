@@ -214,7 +214,7 @@ export default function App() {
     try {
       // lire le profil concerné
       const { data: row, error: rErr } = await supabase
-        .from("profiles")
+        .from("publique.profils")
         .select("*")
         .eq("id", userId)
         .single();
@@ -239,7 +239,7 @@ export default function App() {
             };
 
       const { data, error } = await supabase
-        .from("profiles")
+        .from("publique.profils")
         .update(patch)
         .eq("id", userId)
         .select("*")
