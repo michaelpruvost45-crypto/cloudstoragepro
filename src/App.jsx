@@ -1,327 +1,562 @@
-import "./styles.css";
-import logo from "/logo.png";
 import { useEffect, useMemo, useState } from "react";
+import "./styles.css";
 import { supabase } from "./supabaseClient";
-
-/**
- * Tables utilisées (comme ton SQL):
- * - public.profiles: id(uuid PK), email, first_name, last_name, subscription, is_admin,
- *   request_status, request_note, request_handled_at, request_expires_at
- * - public.messages_contact: id, name, email, message, created_at
- */
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-
-  // Auth modal
   const [openAuth, setOpenAuth] = useState(false);
 
-  // Contact popup
-  const [toast, setToast] = useState({ open: false, type: "success", text: "" });
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
-  // Admin: onglet
-  const [adminTab, setAdminTab] = useState("requests"); // requests | contacts
+  // popup “message envoyé”
+  const [toast, setToast] = useState(null);
+
+  // autoriser le changement uniquement via bouton espace client
+  const [allowPlanChange, setAllowPlanChange] = useState(false);
+
+  // Admin panel
+  const [adminRequests, setAdminRequests] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, newSession) => {
-      setSession(newSession || null);
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => setSession(s || null));
     return () => sub?.subscription?.unsubscribe?.();
   }, []);
 
   useEffect(() => {
     if (!session?.user?.id) {
       setProfile(null);
-      setProfileLoading(false);
       return;
     }
-    (async () => {
-      setProfileLoading(true);
-      try {
-        const user = session.user;
-
-        // 1) Lire profil
-        const { data: existing, error: e1 } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (e1) throw e1;
-
-        // 2) Créer si absent (upsert)
-        if (!existing) {
-          const first_name = user.user_metadata?.first_name || "";
-          const last_name = user.user_metadata?.last_name || "";
-          const email = user.email || "";
-
-          const { data: created, error: e2 } = await supabase
-            .from("profiles")
-            .upsert(
-              {
-                id: user.id,
-                email,
-                first_name,
-                last_name,
-                subscription: "Basique", // par défaut
-                is_admin: false
-              },
-              { onConflict: "id" }
-            )
-            .select("*")
-            .single();
-
-          if (e2) throw e2;
-          setProfile(created);
-        } else {
-          setProfile(existing);
-        }
-      } catch (err) {
-        console.error(err);
-        setProfile(null);
-      } finally {
-        setProfileLoading(false);
-      }
-    })();
+    loadOrCreateProfile(session.user);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
-  // Expiration auto 48h (sans cron)
   useEffect(() => {
-    if (!profile?.id) return;
-    if (profile.request_status !== "pending") return;
-    if (!profile.request_expires_at) return;
+    // si admin -> charger les demandes
+    if (profile?.role === "admin") loadAdminRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.role]);
 
-    const expires = new Date(profile.request_expires_at).getTime();
-    const now = Date.now();
-    if (now <= expires) return;
+  async function loadOrCreateProfile(user) {
+    setProfileLoading(true);
+    try {
+      const { data: existing, error: readErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    (async () => {
-      try {
+      if (readErr) throw readErr;
+
+      if (existing) {
+        // expiration 48h (Option A : côté app)
+        const expired = await maybeExpireClientRequest(existing);
+        setProfile(expired);
+        return;
+      }
+
+      const first_name = user.user_metadata?.first_name || "";
+      const last_name = user.user_metadata?.last_name || "";
+
+      const { data: created, error: insErr } = await supabase
+        .from("profiles")
+        .insert({
+          id: user.id,
+          first_name,
+          last_name,
+          plan: null,
+          pending_plan: null,
+          change_requested_at: null,
+          request_status: null,
+          request_note: null,
+          request_handled_at: null,
+          request_expires_at: null,
+          role: "user"
+        })
+        .select("*")
+        .single();
+
+      if (insErr) throw insErr;
+      setProfile(created);
+    } catch (e) {
+      console.error(e);
+      setProfile(null);
+      alert("❌ Impossible de charger le profil (vérifie table profiles + RLS).");
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  async function maybeExpireClientRequest(p) {
+    try {
+      if (
+        p?.request_status === "pending" &&
+        p?.request_expires_at &&
+        new Date(p.request_expires_at).getTime() < Date.now()
+      ) {
         const { data, error } = await supabase
           .from("profiles")
           .update({
             request_status: "expired",
             request_note: "Aucune réponse sous 48h. Veuillez refaire votre demande.",
-            request_handled_at: new Date().toISOString()
+            request_handled_at: new Date().toISOString(),
+            pending_plan: null
           })
-          .eq("id", profile.id)
+          .eq("id", p.id)
           .select("*")
           .single();
-
-        if (!error && data) setProfile(data);
-      } catch (e) {
-        console.error(e);
+        if (error) throw error;
+        return data;
       }
-    })();
-  }, [profile?.id, profile?.request_status, profile?.request_expires_at]);
-
-  const isLoggedIn = !!session;
-  const fullName = useMemo(() => {
-    const fn = profile?.first_name || session?.user?.user_metadata?.first_name || "";
-    const ln = profile?.last_name || session?.user?.user_metadata?.last_name || "";
-    return `${fn} ${ln}`.trim() || "Utilisateur";
-  }, [profile?.first_name, profile?.last_name, session?.user?.user_metadata]);
-
-  const email = session?.user?.email || profile?.email || "";
-  const isAdmin = !!profile?.is_admin;
+    } catch (e) {
+      console.warn("expire check warning:", e?.message);
+    }
+    return p;
+  }
 
   async function logout() {
     await supabase.auth.signOut();
     setProfile(null);
+    setAllowPlanChange(false);
   }
 
-  function openToast(type, text) {
-    setToast({ open: true, type, text });
-    window.clearTimeout(openToast._t);
-    openToast._t = window.setTimeout(() => setToast({ open: false, type, text: "" }), 3500);
-  }
+  const isLoggedIn = !!session;
+  const userEmail = session?.user?.email || "";
+  const firstName = profile?.first_name || session?.user?.user_metadata?.first_name || "";
+  const lastName = profile?.last_name || session?.user?.user_metadata?.last_name || "";
+  const fullName = `${firstName} ${lastName}`.trim();
 
-  async function safeNotifyAdmin(kind, payload) {
-    // OPTIONNEL: si tu crées une edge function "notify-admin", ça enverra un mail.
-    // Sinon, aucune erreur bloquante.
-    try {
-      await supabase.functions.invoke("notify-admin", {
-        body: { kind, payload }
-      });
-    } catch (e) {
-      // ne bloque pas l'app
-      console.warn("notify-admin non configurée (ok):", e?.message || e);
-    }
-  }
+  const isAdmin = profile?.role === "admin";
+  const currentPlan = profile?.plan || null;
 
-  // ----- Plans
+  // status géré via request_status
+  const requestStatus = profile?.request_status || null;
+  const pendingPlan = profile?.pending_plan || null;
+
+  // ===== PLANS =====
   const plans = useMemo(
     () => [
       {
         name: "Basique",
         price: "4,99",
+        per: "/ mois",
         features: ["100 Go de stockage", "Cryptage basique", "Support standard"],
-        accent: "blue"
+        highlight: false,
+        cta: "CHOISIR"
       },
       {
         name: "Pro",
         price: "9,99",
+        per: "/ mois",
         features: ["1 To de stockage", "Sauvegarde automatique", "Sécurité renforcée"],
-        accent: "gold",
-        badge: "Le Plus Populaire"
+        highlight: true,
+        badge: "Le Plus Populaire",
+        cta: "CHOISIR"
       },
       {
         name: "Premium",
         price: "19,99",
-        features: ["5 To de stockage", "Cryptage avancé", "Support prioritaire"],
-        accent: "blue"
+        per: "/ mois",
+        features: ["3 To de stockage", "Cryptage avancé", "Support prioritaire"],
+        highlight: false,
+        cta: "CHOISIR"
       }
     ],
     []
   );
 
-  async function choosePlan(planName) {
-    if (!isLoggedIn) {
+  // ===== CHOISIR / DEMANDER =====
+  async function handlePlanClick(planName) {
+    if (!session?.user?.id) {
       setOpenAuth(true);
       return;
     }
-    if (!profile?.id) {
-      openToast("error", "Profil introuvable (vérifie table profiles + RLS).");
-      return;
-    }
 
-    // si demande déjà en cours => bloqué
-    if (profile.request_status === "pending") {
-      openToast("info", "Une demande est déjà en attente.");
-      return;
-    }
+    // si demande en cours -> bloqué
+    if (requestStatus === "pending") return;
+
+    const hasActivePlan = !!currentPlan;
+
+    // si plan actif, interdit sauf si bouton “changer mon abonnement”
+    if (hasActivePlan && !allowPlanChange) return;
 
     try {
-      const current = profile.subscription || "Basique";
+      // 1) premier abonnement => activation directe
+      if (!hasActivePlan) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .update({
+            plan: planName,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", session.user.id)
+          .select("*")
+          .single();
 
-      // Si c’est le même => rien
-      if (current === planName) {
-        openToast("info", "Tu as déjà cet abonnement.");
+        if (error) throw error;
+        setProfile(data);
+        setAllowPlanChange(false);
+        alert(`✅ Abonnement activé : ${planName}`);
         return;
       }
 
-      // Logique: on fait une demande (pending) qui expire sous 48h
+      // 2) changement => DEMANDE (48h)
       const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
       const { data, error } = await supabase
         .from("profiles")
         .update({
+          pending_plan: planName,
+          change_requested_at: new Date().toISOString(),
           request_status: "pending",
-          request_note: planName, // plan demandé
+          request_note: "Demande envoyée à l’équipe technique.",
           request_handled_at: null,
-          request_expires_at: expiresAt
+          request_expires_at: expiresAt,
+          updated_at: new Date().toISOString()
         })
-        .eq("id", profile.id)
+        .eq("id", session.user.id)
         .select("*")
         .single();
 
       if (error) throw error;
       setProfile(data);
+      setAllowPlanChange(false);
 
-      openToast("success", "✅ Demande envoyée à l’équipe technique (48h).");
-      safeNotifyAdmin("subscription_request", {
-        user_id: profile.id,
-        email,
-        from: current,
-        to: planName,
-        expires_at: expiresAt
-      });
-    } catch (err) {
-      console.error(err);
-      openToast("error", "❌ Impossible d’enregistrer (vérifie RLS profiles).");
+      alert("✅ Demande envoyée à l’équipe technique.\nRéponse sous 48h si place disponible.");
+    } catch (e) {
+      console.error(e);
+      alert("❌ Impossible d’enregistrer (vérifie la table profiles + RLS).");
     }
   }
 
-  // ----- Contact (insert Supabase)
-  async function submitContact({ name, email: fromEmail, message }) {
+  function pricingAction(planName) {
+    if (!isLoggedIn) return { label: "CONNEXION", disabled: false, onClick: () => setOpenAuth(true) };
+
+    if (requestStatus === "pending") return { label: "BLOQUÉ", disabled: true, onClick: null };
+
+    if (currentPlan && !allowPlanChange) return { label: "INDISPONIBLE", disabled: true, onClick: null };
+
+    if (currentPlan && allowPlanChange) {
+      if (planName === currentPlan) return { label: "DÉJÀ ACTIF", disabled: true, onClick: null };
+      return { label: "CHOISIR", disabled: false, onClick: () => handlePlanClick(planName) };
+    }
+
+    return { label: "CHOISIR", disabled: false, onClick: () => handlePlanClick(planName) };
+  }
+
+  // ===== CONTACT (SUPABASE) =====
+  async function submitContact({ name, email, message }) {
     try {
-      const { error } = await supabase.from("messages_contact").insert({
-        name,
-        email: fromEmail,
-        message
-      });
+      const { error } = await supabase.from("messages_contact").insert([{ name, email, message }]);
       if (error) throw error;
 
-      openToast("success", "✅ Merci ! Ton message a bien été envoyé.");
-      safeNotifyAdmin("contact_message", { name, email: fromEmail, message });
-    } catch (err) {
-      console.error(err);
-      openToast("error", "❌ Envoi impossible (vérifie RLS messages_contact).");
+      setToast({
+        title: "Merci pour votre message ✅",
+        text: "Nous avons bien reçu votre demande. Nous vous répondrons rapidement."
+      });
+    } catch (e) {
+      console.error(e);
+      setToast({
+        title: "Erreur ❌",
+        text: "Impossible d’envoyer le message. Réessaie plus tard."
+      });
+    }
+  }
+
+  // ===== ADMIN =====
+  async function loadAdminRequests() {
+    if (!isAdmin) return;
+    setAdminLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name, plan, pending_plan, request_status, request_note, change_requested_at, request_expires_at, email:email")
+        .eq("request_status", "pending")
+        .order("change_requested_at", { ascending: false });
+
+      // si ta table profiles n’a pas email, supprime "email:email" ci-dessus
+      if (error) throw error;
+      setAdminRequests(data || []);
+    } catch (e) {
+      console.error(e);
+      // Si ta table profiles n’a pas la colonne email, on recharge sans.
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name, plan, pending_plan, request_status, request_note, change_requested_at, request_expires_at")
+          .eq("request_status", "pending")
+          .order("change_requested_at", { ascending: false });
+        if (error) throw error;
+        setAdminRequests(data || []);
+      } catch (e2) {
+        console.error(e2);
+      }
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+  async function adminAccept(userId) {
+    try {
+      // récupérer le profil ciblé (RLS admin autorise)
+      const { data: p, error: readErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+      if (readErr) throw readErr;
+
+      if (!p.pending_plan) return;
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          plan: p.pending_plan,
+          pending_plan: null,
+          request_status: "accepted",
+          request_note: "Votre demande a été acceptée ✅",
+          request_handled_at: new Date().toISOString()
+        })
+        .eq("id", userId);
+
+      if (error) throw error;
+      await loadAdminRequests();
+      alert("✅ Demande acceptée.");
+    } catch (e) {
+      console.error(e);
+      alert("❌ Impossible d’accepter (RLS / droits admin).");
+    }
+  }
+
+  async function adminRefuse(userId) {
+    const note = prompt("Motif (optionnel) :") || "Votre demande a été refusée ❌";
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          pending_plan: null,
+          request_status: "refused",
+          request_note: note,
+          request_handled_at: new Date().toISOString()
+        })
+        .eq("id", userId);
+
+      if (error) throw error;
+      await loadAdminRequests();
+      alert("✅ Demande refusée.");
+    } catch (e) {
+      console.error(e);
+      alert("❌ Impossible de refuser (RLS / droits admin).");
     }
   }
 
   return (
-    <div className="page">
-      <Topbar
+    <>
+      <Header
         isLoggedIn={isLoggedIn}
+        userEmail={userEmail}
         fullName={fullName}
-        email={email}
-        onLogin={() => setOpenAuth(true)}
+        onOpenAuth={() => setOpenAuth(true)}
         onLogout={logout}
       />
 
-      <Hero onLogin={() => setOpenAuth(true)} />
+      <Hero onOpenAuth={() => setOpenAuth(true)} />
 
-      <Services />
+      {/* SERVICES */}
+      <section id="features" className="section section--soft">
+        <div className="container">
+          <h2 className="section__title">Nos Services</h2>
+          <div className="grid3">
+            <Service icon="☁️" title="Stockage Évolutif" desc="Espace extensible selon vos besoins" />
+            <Service icon="🛡️" title="Sécurité Avancée" desc="Cryptage & protection de vos données" />
+            <Service icon="⏱️" title="Accès 24/7" desc="Accédez à vos fichiers à tout moment" />
+          </div>
+        </div>
+      </section>
 
-      <Pricing plans={plans} profile={profile} isLoggedIn={isLoggedIn} onChoose={choosePlan} />
+      {/* ESPACE CLIENT EN HAUT DES PLANS */}
+      <section className="section clientWrap">
+        <div className="container">
+          {!isLoggedIn ? (
+            <ClientTeaser onOpenAuth={() => setOpenAuth(true)} />
+          ) : (
+            <ClientArea
+              loading={profileLoading}
+              fullName={fullName}
+              email={userEmail}
+              plan={currentPlan}
+              requestStatus={requestStatus}
+              pendingPlan={pendingPlan}
+              requestNote={profile?.request_note}
+              requestExpiresAt={profile?.request_expires_at}
+              onChangePlan={() => {
+                setAllowPlanChange(true);
+                document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              onFiles={() => alert("📁 Mes fichiers : bientôt (connexion NAS à ajouter).")}
+            />
+          )}
+        </div>
+      </section>
 
-      <Contact onSubmit={submitContact} />
-
-      {isLoggedIn && (
-        <ClientArea
-          loading={profileLoading}
-          profile={profile}
-          fullName={fullName}
-          email={email}
-        />
-      )}
-
+      {/* ADMIN PANEL */}
       {isLoggedIn && isAdmin && (
-        <AdminWrap tab={adminTab} setTab={setAdminTab} openToast={openToast} />
+        <section className="section section--soft">
+          <div className="container">
+            <div className="adminPanel">
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <h2 className="adminTitle">Panneau Admin — Demandes d’abonnement</h2>
+                <button className="btn btn--primary" onClick={loadAdminRequests} disabled={adminLoading}>
+                  {adminLoading ? "Chargement..." : "Rafraîchir"}
+                </button>
+              </div>
+
+              {adminRequests.length === 0 ? (
+                <p style={{ margin: "10px 0 0", color: "#5a6f8f", fontWeight: 800 }}>
+                  Aucune demande en attente.
+                </p>
+              ) : (
+                adminRequests.map((r) => (
+                  <div key={r.id} className="adminRow">
+                    <div style={{ minWidth: 280 }}>
+                      <b>{`${r.first_name || ""} ${r.last_name || ""}`.trim() || "Utilisateur"}</b>
+                      <div style={{ color: "#5a6f8f", fontWeight: 800, fontSize: 13 }}>
+                        Plan actuel : <span className="pill">{r.plan || "Aucun"}</span>{" "}
+                        → Demande : <span className="pill">{r.pending_plan}</span>
+                      </div>
+                      <div style={{ color: "#5a6f8f", fontWeight: 800, fontSize: 12, marginTop: 4 }}>
+                        Expire : {r.request_expires_at ? new Date(r.request_expires_at).toLocaleString() : "—"}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <button className="btn btn--primary" onClick={() => adminAccept(r.id)}>
+                        Accepter
+                      </button>
+                      <button className="btn btn--light" onClick={() => adminRefuse(r.id)}>
+                        Refuser
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
       )}
+
+      {/* PRICING */}
+      <section id="pricing" className="section">
+        <div className="container">
+          <h2 className="section__title">Choisissez Votre Abonnement</h2>
+
+          <div className="pricingGrid">
+            {plans.map((p) => {
+              const a = pricingAction(p.name);
+              return (
+                <div key={p.name} className={`priceCard ${p.highlight ? "priceCard--pro" : ""}`}>
+                  {p.badge && <div className="priceCard__badge">{p.badge}</div>}
+
+                  <div className="priceCard__name">{p.name}</div>
+
+                  <div className="priceCard__price">
+                    <span className="priceCard__currency">€</span>
+                    <span className="priceCard__amount">{p.price}</span>
+                    <span className="priceCard__per"> {p.per}</span>
+                  </div>
+
+                  <ul className="priceCard__list">
+                    {p.features.map((f) => (
+                      <li key={f}>✓ {f}</li>
+                    ))}
+                  </ul>
+
+                  <button
+                    className={`btn ${p.highlight ? "btn--gold" : "btn--primary"} btn--full`}
+                    onClick={a.onClick || undefined}
+                    disabled={a.disabled}
+                  >
+                    {a.label}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="note">
+            <b>Note :</b>{" "}
+            {!isLoggedIn
+              ? "Connecte-toi pour choisir une offre."
+              : requestStatus === "pending"
+              ? "Changement en attente (48h)."
+              : currentPlan && !allowPlanChange
+              ? "Pour changer de plan, utilise le bouton dans l’espace client."
+              : "Tu peux choisir ou demander un changement."}
+          </div>
+        </div>
+      </section>
+
+      {/* CONTACT */}
+      <section id="contact" className="section section--soft">
+        <div className="container">
+          <h2 className="section__title">Contactez-Nous</h2>
+          <ContactForm onSubmit={submitContact} />
+        </div>
+      </section>
 
       <Footer />
 
       {openAuth && <AuthModal onClose={() => setOpenAuth(false)} onLoggedIn={() => setOpenAuth(false)} />}
 
-      {toast.open && <Toast type={toast.type} text={toast.text} onClose={() => setToast({ open: false })} />}
-    </div>
+      {toast && (
+        <div className="toastOverlay" onClick={() => setToast(null)}>
+          <div className="toast" onClick={(e) => e.stopPropagation()}>
+            <h3 className="toastTitle">{toast.title}</h3>
+            <p className="toastText">{toast.text}</p>
+            <div className="toastActions">
+              <button className="btn btn--primary" onClick={() => setToast(null)}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
 /* =========================
-   UI - TOPBAR / HERO
-   ========================= */
+   UI Components
+========================= */
 
-function Topbar({ isLoggedIn, fullName, email, onLogin, onLogout }) {
+function Header({ isLoggedIn, userEmail, fullName, onOpenAuth, onLogout }) {
   return (
-    <header className="topnav">
-      <div className="wrap topnav__inner">
-        <div className="brand">
-          <img src={logo} alt="CloudStoragePro" className="brand__logo" />
-          <span className="brand__text">CloudStoragePro</span>
-        </div>
+    <header className="topbar">
+      <div className="container topbar__inner">
+        <a className="brand" href="#top">
+          <img className="brand__logo" src="/logo.png" alt="CloudStoragePro" />
+          <span className="brand__name">CloudStoragePro</span>
+        </a>
 
-        <nav className="menu">
-          <a href="#home">Accueil</a>
+        <nav className="nav">
+          <a href="#top">Accueil</a>
           <a href="#features">Fonctionnalités</a>
           <a href="#pricing">Tarifs</a>
           <a href="#contact">Contact</a>
         </nav>
 
         {!isLoggedIn ? (
-          <button className="btn btn--light" onClick={onLogin}>
+          <button className="btn btn--light" onClick={onOpenAuth}>
             Connexion
           </button>
         ) : (
-          <div className="userChip">
-            <div className="userChip__meta">
-              <div className="userChip__name">{fullName}</div>
-              <div className="userChip__email">{email}</div>
+          <div className="userBox">
+            <div className="userBox__who">
+              <div className="userBox__name">{fullName || "Utilisateur"}</div>
+              <div className="userBox__email">{userEmail}</div>
             </div>
             <button className="btn btn--light" onClick={onLogout}>
               Déconnexion
@@ -333,152 +568,207 @@ function Topbar({ isLoggedIn, fullName, email, onLogin, onLogout }) {
   );
 }
 
-function Hero({ onLogin }) {
+function Hero({ onOpenAuth }) {
   return (
-    <section id="home" className="heroX">
-      <div className="wrap heroX__grid">
-        <div className="heroX__left">
-          <h1 className="heroX__title">
+    <section id="top" className="hero">
+      <div className="container hero__inner">
+        <div>
+          <h1>
             Stockage Cloud Sécurisé <br /> Pour Vos Données
           </h1>
-          <p className="heroX__subtitle">
-            Stockez et sauvegardez vos fichiers en toute sécurité sur notre plateforme de cloud.
-          </p>
+          <p>Stockez et sauvegardez vos fichiers en toute sécurité sur notre plateforme de cloud.</p>
 
-          <div className="heroX__buttons">
+          <div className="hero__cta">
             <a className="btn btn--primary" href="#pricing">
               Commencer Maintenant
             </a>
-            <button className="btn btn--ghost" onClick={onLogin}>
-              En savoir plus
+            <button className="btn btn--ghost" onClick={onOpenAuth}>
+              Connexion
             </button>
           </div>
         </div>
 
-        <div className="heroX__right">
-          <div className="heroX__art" aria-hidden="true">
-            {/* visuel simple sans assets externes */}
-            <div className="cloudBig" />
-            <div className="cloudSmall cloudSmall--1" />
-            <div className="cloudSmall cloudSmall--2" />
-            <div className="serverStack">
-              <div className="server" />
-              <div className="server" />
-              <div className="server" />
-            </div>
-            <div className="cloudIcon" />
+        <div className="heroArt">
+          <div className="heroArt__inner">
+            <HeroSvg />
+            <div className="heroArt__title">Cloud sécurisé</div>
+            <div className="heroArt__sub">Synchronisation & sauvegarde</div>
           </div>
         </div>
       </div>
-      <div className="heroX__clouds" />
+      <div className="hero__clouds" />
     </section>
   );
 }
 
-/* =========================
-   SERVICES
-   ========================= */
-
-function Services() {
-  const items = [
-    { title: "Stockage Évolutif", desc: "Espace extensible selon vos besoins", icon: "☁️" },
-    { title: "Sécurité Avancée", desc: "Cryptage & protection de vos données", icon: "🛡️" },
-    { title: "Accès 24/7", desc: "Accédez à vos fichiers à tout moment", icon: "⏱️" }
-  ];
-
+function HeroSvg() {
+  // SVG inline pour éviter d’avoir des fichiers cloud.png etc.
   return (
-    <section id="features" className="sectionX">
-      <div className="wrap">
-        <h2 className="titleX">Nos Services</h2>
-        <div className="cards3">
-          {items.map((it) => (
-            <div key={it.title} className="serviceCardX">
-              <div className="serviceCardX__icon">{it.icon}</div>
-              <div className="serviceCardX__title">{it.title}</div>
-              <div className="serviceCardX__desc">{it.desc}</div>
-            </div>
-          ))}
-        </div>
+    <svg viewBox="0 0 600 340" width="100%" height="auto" aria-hidden="true">
+      <defs>
+        <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#e9f6ff" />
+          <stop offset="1" stopColor="#bfe6ff" />
+        </linearGradient>
+        <linearGradient id="g2" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stopColor="#0b63da" />
+          <stop offset="1" stopColor="#35c5ff" />
+        </linearGradient>
+      </defs>
+
+      <rect x="0" y="0" width="600" height="340" rx="24" fill="rgba(255,255,255,0.06)" />
+      <g transform="translate(70,40)">
+        <path
+          d="M130 210c-48 0-88-33-88-74 0-34 26-63 63-72 10-43 53-74 103-74 55 0 102 38 109 86 40 4 71 35 71 72 0 40-37 72-83 72H130z"
+          fill="url(#g1)"
+          opacity="0.96"
+        />
+        <path
+          d="M210 220c-70 0-128-48-128-108 0-50 38-93 92-106C188 41 247 0 316 0c77 0 142 53 151 121 55 6 98 49 98 102 0 57-51 103-115 103H210z"
+          fill="url(#g2)"
+          opacity="0.25"
+        />
+        {/* disque */}
+        <circle cx="330" cy="132" r="70" fill="#0b63da" opacity="0.20" />
+        <circle cx="330" cy="132" r="58" fill="#0b63da" opacity="0.28" />
+
+        {/* petit “drive” */}
+        <g transform="translate(292,108)">
+          <rect x="0" y="0" width="78" height="50" rx="12" fill="#0b63da" opacity="0.65" />
+          <rect x="10" y="12" width="58" height="6" rx="3" fill="#ffffff" opacity="0.9" />
+          <rect x="10" y="26" width="48" height="6" rx="3" fill="#ffffff" opacity="0.85" />
+          <circle cx="58" cy="38" r="5" fill="#ffffff" opacity="0.9" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+function Service({ icon, title, desc }) {
+  return (
+    <div className="serviceCard">
+      <div className="serviceIcon" aria-hidden="true">
+        <span style={{ fontSize: 28 }}>{icon}</span>
       </div>
-    </section>
+      <div className="serviceTitle">{title}</div>
+      <div className="serviceDesc">{desc}</div>
+    </div>
   );
 }
 
-/* =========================
-   PRICING
-   ========================= */
+function ClientTeaser({ onOpenAuth }) {
+  return (
+    <div className="clientCard">
+      <div>
+        <h2 className="clientTitle">Espace client</h2>
+        <p className="clientText">
+          Connecte-toi pour gérer ton abonnement et accéder (bientôt) à tes fichiers.
+        </p>
+      </div>
+      <div className="clientActions">
+        <button className="btn btn--primary" onClick={onOpenAuth}>
+          Connexion
+        </button>
+        <a className="btn btn--light" href="#pricing">
+          Voir les offres
+        </a>
+      </div>
+    </div>
+  );
+}
 
-function Pricing({ plans, profile, isLoggedIn, onChoose }) {
-  const subscription = profile?.subscription || "Basique";
-  const status = profile?.request_status || null;
-  const requested = profile?.request_note || null;
+function ClientArea({
+  loading,
+  fullName,
+  email,
+  plan,
+  requestStatus,
+  pendingPlan,
+  requestNote,
+  requestExpiresAt,
+  onChangePlan,
+  onFiles
+}) {
+  const planLabel = loading ? "Chargement..." : plan || "Aucun choisi";
 
-  const locked = status === "pending";
+  let notice = null;
+  if (requestStatus === "pending") {
+    notice = (
+      <div className="notice notice--pending">
+        ✅ Demande de changement envoyée : <b>{pendingPlan}</b>
+        <small>
+          Le changement sera effectué sous 48h si place disponible.
+          {requestExpiresAt ? ` (Expire le ${new Date(requestExpiresAt).toLocaleString()})` : ""}
+        </small>
+      </div>
+    );
+  }
+  if (requestStatus === "accepted") {
+    notice = (
+      <div className="notice notice--ok">
+        ✅ Votre demande a été acceptée.
+        <small>{requestNote || ""}</small>
+      </div>
+    );
+  }
+  if (requestStatus === "refused") {
+    notice = (
+      <div className="notice notice--bad">
+        ❌ Votre demande a été refusée.
+        <small>{requestNote || ""}</small>
+      </div>
+    );
+  }
+  if (requestStatus === "expired") {
+    notice = (
+      <div className="notice notice--bad">
+        ⏳ Demande expirée.
+        <small>{requestNote || "Veuillez refaire votre demande."}</small>
+      </div>
+    );
+  }
 
   return (
-    <section id="pricing" className="sectionX sectionX--soft">
-      <div className="wrap">
-        <h2 className="titleX">Choisissez Votre Abonnement</h2>
+    <div className="clientCard">
+      <div>
+        <h2 className="clientTitle">Espace client</h2>
+        <p className="clientText">
+          Bienvenue <b>{fullName || "Utilisateur"}</b> 👋 <br />
+          <span className="clientSmall">{email}</span>
+        </p>
 
-        {locked && (
-          <div className="infoBar">
-            ℹ️ Demande en attente : <b>{requested}</b> — réponse sous 48h (si place disponible).
+        <div className="clientInfo">
+          <div className="infoItem">
+            <div className="infoLabel">Abonnement</div>
+            <div className="infoValue">{planLabel}</div>
           </div>
-        )}
-
-        <div className="pricingGridX">
-          {plans.map((p) => {
-            const same = subscription === p.name;
-            const disabled = locked || same;
-
-            return (
-              <div key={p.name} className={`priceX ${p.accent === "gold" ? "priceX--pro" : ""}`}>
-                {p.badge && <div className="badgeX">{p.badge}</div>}
-
-                <div className="priceX__name">{p.name}</div>
-                <div className="priceX__value">
-                  <span className="priceX__currency">€</span>
-                  <span className="priceX__amount">{p.price}</span>
-                  <span className="priceX__per"> / mois</span>
-                </div>
-
-                <ul className="priceX__list">
-                  {p.features.map((f) => (
-                    <li key={f}>✓ {f}</li>
-                  ))}
-                </ul>
-
-                <button
-                  className={`btn btn--full ${p.accent === "gold" ? "btn--gold" : "btn--primary"}`}
-                  onClick={() => onChoose(p.name)}
-                  disabled={disabled && isLoggedIn}
-                  title={!isLoggedIn ? "Connecte-toi pour choisir" : disabled ? "Indisponible" : "Choisir"}
-                >
-                  {!isLoggedIn ? "CONNEXION" : same ? "DÉJÀ ACTIF" : "CHOISIR"}
-                </button>
-              </div>
-            );
-          })}
+          <div className="infoItem">
+            <div className="infoLabel">Statut</div>
+            <div className="infoValue">Connecté ✅</div>
+          </div>
         </div>
 
-        <div className="noteX">
-          <b>Note :</b>{" "}
-          {!isLoggedIn
-            ? "Connecte-toi pour choisir une offre."
-            : locked
-            ? "Changement en attente (48h)."
-            : "Tu peux demander un changement d’abonnement à tout moment."}
-        </div>
+        {notice}
       </div>
-    </section>
+
+      <div className="clientActions">
+        <button className="btn btn--light" onClick={onFiles}>
+          Mes fichiers (bientôt)
+        </button>
+
+        <button className="btn btn--primary" onClick={onChangePlan} disabled={requestStatus === "pending"}>
+          {requestStatus === "pending" ? "Changement en attente" : "Changer mon abonnement"}
+        </button>
+      </div>
+    </div>
   );
 }
 
 /* =========================
-   CONTACT
-   ========================= */
+   CONTACT FORM
+========================= */
 
-function Contact({ onSubmit }) {
+function ContactForm({ onSubmit }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -490,11 +780,7 @@ function Contact({ onSubmit }) {
 
     setSending(true);
     try {
-      await onSubmit({
-        name: name.trim(),
-        email: email.trim(),
-        message: message.trim()
-      });
+      await onSubmit({ name: name.trim(), email: email.trim(), message: message.trim() });
       setName("");
       setEmail("");
       setMessage("");
@@ -504,333 +790,48 @@ function Contact({ onSubmit }) {
   }
 
   return (
-    <section id="contact" className="sectionX">
-      <div className="wrap">
-        <h2 className="titleX">Contactez-Nous</h2>
+    <form className="contactForm" onSubmit={submit}>
+      <input className="input" placeholder="Nom" value={name} onChange={(e) => setName(e.target.value)} />
+      <input
+        className="input"
+        placeholder="Email"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <textarea
+        className="textarea"
+        placeholder="Message"
+        rows={6}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+      />
+      <button className="btn btn--primary btn--center" type="submit" disabled={sending}>
+        {sending ? "Envoi..." : "Envoyer"}
+      </button>
+    </form>
+  );
+}
 
-        <form className="contactX" onSubmit={submit}>
-          <input className="inputX" placeholder="Nom" value={name} onChange={(e) => setName(e.target.value)} />
-          <input
-            className="inputX"
-            placeholder="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <textarea
-            className="textareaX"
-            placeholder="Message"
-            rows={5}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-          <button className="btn btn--primary btn--center" type="submit" disabled={sending}>
-            {sending ? "Envoi..." : "Envoyer"}
-          </button>
-        </form>
+function Footer() {
+  return (
+    <footer className="footer">
+      <div className="container footer__inner">
+        © {new Date().getFullYear()} CloudStoragePro — Tous droits réservés
       </div>
-    </section>
+    </footer>
   );
 }
 
 /* =========================
-   ESPACE CLIENT
-   ========================= */
-
-function ClientArea({ loading, profile, fullName, email }) {
-  const subscription = profile?.subscription || "Basique";
-  const status = profile?.request_status || null;
-  const requested = profile?.request_note || null;
-
-  return (
-    <section className="sectionX sectionX--soft">
-      <div className="wrap">
-        <div className="clientX">
-          <div className="clientX__left">
-            <h3 className="clientX__title">Espace client</h3>
-            <div className="clientX__hello">
-              Bienvenue <b>{fullName}</b> 👋
-              <div className="clientX__mail">{email}</div>
-            </div>
-
-            <div className="clientX__chips">
-              <div className="chipX">
-                <div className="chipX__label">Abonnement</div>
-                <div className="chipX__value">{loading ? "..." : subscription}</div>
-              </div>
-              <div className="chipX">
-                <div className="chipX__label">Statut</div>
-                <div className="chipX__value">Connecté ✅</div>
-              </div>
-            </div>
-
-            {status === "pending" && (
-              <div className="msgX msgX--info">
-                ℹ️ Demande envoyée : <b>{requested}</b>
-                <div className="msgX__small">Le changement sera effectué sous 48h si place disponible.</div>
-              </div>
-            )}
-
-            {status === "accepted" && (
-              <div className="msgX msgX--ok">
-                ✅ Votre demande a été acceptée.
-                <div className="msgX__small">Votre abonnement est à jour.</div>
-              </div>
-            )}
-
-            {status === "refused" && (
-              <div className="msgX msgX--bad">
-                ❌ Votre demande a été refusée.
-                <div className="msgX__small">{profile?.request_note || "Vous pouvez refaire une demande."}</div>
-              </div>
-            )}
-
-            {status === "expired" && (
-              <div className="msgX msgX--bad">
-                ⌛ Demande expirée.
-                <div className="msgX__small">{profile?.request_note}</div>
-              </div>
-            )}
-          </div>
-
-          <div className="clientX__right">
-            <div className="clientX__actions">
-              <button
-                className="btn btn--light"
-                onClick={() => alert("📁 Mes fichiers (bientôt)")}
-              >
-                Mes fichiers (bientôt)
-              </button>
-              <button
-                className="btn btn--light"
-                onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })}
-              >
-                Changer mon abonnement
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* =========================
-   ADMIN (premium)
-   ========================= */
-
-function AdminWrap({ tab, setTab, openToast }) {
-  return (
-    <section className="sectionX">
-      <div className="wrap">
-        <div className="adminX">
-          <div className="adminX__head">
-            <h2 className="adminX__title">Panneau Admin</h2>
-            <div className="adminX__tabs">
-              <button className={`pill ${tab === "requests" ? "pill--on" : ""}`} onClick={() => setTab("requests")}>
-                Demandes abonnement
-              </button>
-              <button className={`pill ${tab === "contacts" ? "pill--on" : ""}`} onClick={() => setTab("contacts")}>
-                Messages contact
-              </button>
-            </div>
-          </div>
-
-          {tab === "requests" ? <AdminRequests openToast={openToast} /> : <AdminContacts openToast={openToast} />}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function AdminRequests({ openToast }) {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .in("request_status", ["pending", "accepted", "refused", "expired"])
-        .order("request_handled_at", { ascending: false })
-        .order("request_expires_at", { ascending: false });
-
-      if (error) throw error;
-      setRows(data || []);
-    } catch (e) {
-      console.error(e);
-      openToast("error", "RLS admin: ajoute la policy admin (voir note sous le code).");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line
-  }, []);
-
-  async function accept(u) {
-    try {
-      const requested = u.request_note;
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          subscription: requested,
-          request_status: "accepted",
-          request_handled_at: new Date().toISOString()
-        })
-        .eq("id", u.id);
-      if (error) throw error;
-
-      openToast("success", "✅ Demande acceptée");
-      load();
-    } catch (e) {
-      console.error(e);
-      openToast("error", "Impossible d'accepter (RLS admin).");
-    }
-  }
-
-  async function refuse(u) {
-    const note = prompt("Note (optionnel) : pourquoi refus ?");
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          request_status: "refused",
-          request_note: note ? note : "Refusé par l’admin.",
-          request_handled_at: new Date().toISOString()
-        })
-        .eq("id", u.id);
-      if (error) throw error;
-
-      openToast("success", "❌ Demande refusée");
-      load();
-    } catch (e) {
-      console.error(e);
-      openToast("error", "Impossible de refuser (RLS admin).");
-    }
-  }
-
-  return (
-    <div className="adminTableX">
-      <div className="adminTableX__bar">
-        <button className="btn btn--light" onClick={load} disabled={loading}>
-          {loading ? "Chargement..." : "Rafraîchir"}
-        </button>
-      </div>
-
-      <div className="tableX">
-        <div className="tableX__row tableX__head">
-          <div>Email</div>
-          <div>Actuel</div>
-          <div>Demande</div>
-          <div>Statut</div>
-          <div>Expire</div>
-          <div>Actions</div>
-        </div>
-
-        {rows.map((u) => (
-          <div key={u.id} className="tableX__row">
-            <div className="mono">{u.email || "-"}</div>
-            <div>{u.subscription || "-"}</div>
-            <div><b>{u.request_status ? (u.request_status === "pending" ? u.request_note : u.request_note || "-") : "-"}</b></div>
-            <div>
-              <span className={`tag tag--${u.request_status || "none"}`}>{u.request_status || "-"}</span>
-            </div>
-            <div className="mono">{u.request_expires_at ? new Date(u.request_expires_at).toLocaleString() : "-"}</div>
-            <div className="actionsX">
-              {u.request_status === "pending" ? (
-                <>
-                  <button className="btn btn--primary btn--sm" onClick={() => accept(u)}>
-                    Accepter
-                  </button>
-                  <button className="btn btn--ghost btn--sm" onClick={() => refuse(u)}>
-                    Refuser
-                  </button>
-                </>
-              ) : (
-                <span className="muted">—</span>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {!loading && rows.length === 0 && <div className="emptyX">Aucune demande.</div>}
-      </div>
-    </div>
-  );
-}
-
-function AdminContacts({ openToast }) {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("messages_contact")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setRows(data || []);
-    } catch (e) {
-      console.error(e);
-      openToast("error", "RLS contact: ajoute une policy SELECT admin (voir note sous le code).");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line
-  }, []);
-
-  return (
-    <div className="adminTableX">
-      <div className="adminTableX__bar">
-        <button className="btn btn--light" onClick={load} disabled={loading}>
-          {loading ? "Chargement..." : "Rafraîchir"}
-        </button>
-      </div>
-
-      <div className="tableX">
-        <div className="tableX__row tableX__head">
-          <div>Date</div>
-          <div>Nom</div>
-          <div>Email</div>
-          <div>Message</div>
-        </div>
-
-        {rows.map((m) => (
-          <div key={m.id} className="tableX__row">
-            <div className="mono">{m.created_at ? new Date(m.created_at).toLocaleString() : "-"}</div>
-            <div>{m.name}</div>
-            <div className="mono">{m.email}</div>
-            <div className="msgCell">{m.message}</div>
-          </div>
-        ))}
-
-        {!loading && rows.length === 0 && <div className="emptyX">Aucun message.</div>}
-      </div>
-    </div>
-  );
-}
-
-/* =========================
-   AUTH MODAL
-   ========================= */
+   AUTH MODAL (login/signup/forgot)
+========================= */
 
 function AuthModal({ onClose, onLoggedIn }) {
   return (
-    <div className="modalO" role="dialog" aria-modal="true">
-      <div className="modalC">
-        <button className="modalX" onClick={onClose} aria-label="Fermer">
+    <div className="modalOverlay" role="dialog" aria-modal="true">
+      <div className="modalCard">
+        <button className="modalClose" onClick={onClose} aria-label="Fermer">
           ✕
         </button>
         <AuthForm onLoggedIn={onLoggedIn} />
@@ -860,7 +861,7 @@ function AuthForm({ onLoggedIn }) {
         const redirectTo = window.location.origin;
         const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
         if (error) throw error;
-        setMsg("✅ Email envoyé. Clique sur le lien pour changer ton mot de passe.");
+        setMsg("✅ Email envoyé. Clique sur le lien dans ton mail pour changer ton mot de passe.");
         return;
       }
 
@@ -873,9 +874,7 @@ function AuthForm({ onLoggedIn }) {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            data: { first_name: firstName.trim(), last_name: lastName.trim() }
-          }
+          options: { data: { first_name: firstName.trim(), last_name: lastName.trim() } }
         });
         if (error) throw error;
 
@@ -912,7 +911,7 @@ function AuthForm({ onLoggedIn }) {
       if (error) throw error;
       setMsg("✅ Email de confirmation renvoyé !");
     } catch (err) {
-      setMsg("❌ " + (err?.message || "Impossible"));
+      setMsg("❌ " + (err?.message || "Impossible de renvoyer l’email"));
     } finally {
       setLoading(false);
     }
@@ -920,52 +919,45 @@ function AuthForm({ onLoggedIn }) {
 
   return (
     <div>
-      <div className="authHeadX">
-        <img src={logo} alt="logo" className="authLogoX" />
+      <div className="authHead">
+        <img src="/logo.png" alt="logo" className="authLogo" />
         <div>
-          <div className="authBrandX">CloudStoragePro</div>
-          <div className="authSubX">Espace client</div>
+          <div className="authBrand">CloudStoragePro</div>
+          <div className="authSub">Espace client</div>
         </div>
       </div>
 
-      <h3 className="authTitleX">
+      <h3 className="authTitle">
         {mode === "login" ? "Connexion" : mode === "signup" ? "Créer un compte" : "Mot de passe oublié"}
       </h3>
 
       <form onSubmit={submit}>
         {mode === "signup" && (
-          <div className="authRowX">
-            <label className="authLabelX">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label className="authLabel">
               Prénom
-              <input className="authInputX" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              <input className="authInput" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
             </label>
-            <label className="authLabelX">
+            <label className="authLabel">
               Nom
-              <input className="authInputX" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              <input className="authInput" value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </label>
           </div>
         )}
 
-        <label className="authLabelX">
+        <label className="authLabel">
           Email
-          <input
-            className="authInputX"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ex: contact@email.com"
-          />
+          <input className="authInput" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
 
         {mode !== "forgot" && (
-          <label className="authLabelX">
+          <label className="authLabel">
             Mot de passe
             <input
-              className="authInputX"
+              className="authInput"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
             />
           </label>
         )}
@@ -983,55 +975,31 @@ function AuthForm({ onLoggedIn }) {
 
       {mode === "login" && (
         <>
-          <button className="linkBtn" type="button" onClick={() => setMode("forgot")}>
+          <button className="authSwitch" type="button" onClick={() => setMode("forgot")}>
             Mot de passe oublié ?
           </button>
-          <button className="linkBtn" type="button" onClick={resendConfirmation} disabled={loading}>
+          <button className="authSwitch" type="button" onClick={resendConfirmation} disabled={loading}>
             Renvoyer l’email de confirmation
           </button>
-          <button className="linkBtn" type="button" onClick={() => setMode("signup")}>
+          <button className="authSwitch" type="button" onClick={() => setMode("signup")}>
             Créer un compte
           </button>
         </>
       )}
 
       {mode === "signup" && (
-        <button className="linkBtn" type="button" onClick={() => setMode("login")}>
+        <button className="authSwitch" type="button" onClick={() => setMode("login")}>
           J’ai déjà un compte
         </button>
       )}
 
       {mode === "forgot" && (
-        <button className="linkBtn" type="button" onClick={() => setMode("login")}>
+        <button className="authSwitch" type="button" onClick={() => setMode("login")}>
           Retour à la connexion
         </button>
       )}
 
-      {msg && <div className="authMsgX">{msg}</div>}
-    </div>
-  );
-}
-
-/* =========================
-   FOOTER / TOAST
-   ========================= */
-
-function Footer() {
-  return (
-    <footer className="footerX">
-      © {new Date().getFullYear()} CloudStoragePro — Tous droits réservés
-    </footer>
-  );
-}
-
-function Toast({ type = "success", text, onClose }) {
-  return (
-    <div className={`toastX toastX--${type}`} onClick={onClose} role="status">
-      <div className="toastX__dot" />
-      <div className="toastX__text">{text}</div>
-      <button className="toastX__x" aria-label="Fermer" onClick={onClose}>
-        ✕
-      </button>
+      {msg && <div className="authMsg">{msg}</div>}
     </div>
   );
 }
