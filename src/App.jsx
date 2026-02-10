@@ -82,9 +82,9 @@ export default function App() {
       if (insErr) throw insErr;
       setProfile(created);
     } catch (e) {
-      console.error(e);
-      setProfile(null);
-      alert("❌ Impossible de charger le profil (vérifie table profiles + RLS).");
+  console.error(e);
+  alert("❌ Impossible d’enregistrer : " + (e?.message || "") + "\n" + (e?.details || ""));
+}
     } finally {
       setProfileLoading(false);
     }
