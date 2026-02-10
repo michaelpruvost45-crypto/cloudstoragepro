@@ -625,19 +625,31 @@ function Pricing({ onOpenAuth, isLoggedIn, currentPlan, pendingPlan, allowPlanCh
   const hasPending = !!pendingPlan;
 
   function getActionState(planName) {
-    if (!isLoggedIn) return { label: "S'INSCRIRE", disabled: false, onClick: onOpenAuth };
-
-    if (hasPending) return { label: "BLOQUÉ", disabled: true, onClick: null };
-
-    if (hasPlan && !allowPlanChange) return { label: "BLOQUÉ", disabled: true, onClick: null };
-
-    if (hasPlan && allowPlanChange) {
-      if (planName === currentPlan) return { label: "DÉJÀ ACTIF", disabled: true, onClick: null };
-      return { label: "ESSAYER", disabled: false, onClick: () => onPlanClick(planName) };
-    }
-
-    return { label: "S'INSCRIRE", disabled: false, onClick: () => onPlanClick(planName) };
+  if (!isLoggedIn) {
+    return { label: "SE CONNECTER", disabled: false, onClick: onOpenAuth };
   }
+
+  if (hasPending) {
+    return { label: "EN ATTENTE", disabled: true, onClick: null };
+  }
+
+  if (!hasPlan) {
+    return { label: "CHOISIR", disabled: false, onClick: () => onPlanClick(planName) };
+  }
+
+  if (hasPlan && !allowPlanChange) {
+    return { label: "DÉJÀ ACTIF", disabled: true, onClick: null };
+  }
+
+  if (hasPlan && allowPlanChange) {
+    if (planName === currentPlan) {
+      return { label: "ACTIF", disabled: true, onClick: null };
+    }
+    return { label: "CHANGER", disabled: false, onClick: () => onPlanClick(planName) };
+  }
+
+  return { label: "CHOISIR", disabled: false, onClick: () => onPlanClick(planName) };
+}
 
   return (
     <section id="pricing" className="section section--soft">
